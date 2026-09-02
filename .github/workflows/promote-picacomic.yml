@@ -1,0 +1,132 @@
+name: Promote Picacomic Production Handoff
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-picacomic.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-picacomic-production
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout public production handoff
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: extension-staging
+          path: handoff
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify handoff source and payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="5b26a372fb46003d98982895a11f495e954ea04a"
+          actual="$(tr -d '\r\n' < handoff/production-handoff/SOURCE_SHA.txt)"
+          [[ "$actual" == "$expected" ]] || { echo "::error::Unexpected source SHA: $actual"; exit 1; }
+          test -f handoff/production-handoff/tachiyomi-zh.picacomic-v1.6.11.apk
+          test -f handoff/production-handoff/tachiyomi-zh.picacomic-v1.6.11.jar
+          test -f handoff/production-handoff/index.pb
+          test -f handoff/production-handoff/index.json
+          test -f handoff/production-handoff/published-state.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("handoff/production-handoff/index.json").read_text("utf-8"))
+          package = "eu.kanade.tachiyomi.extension.zh.picacomic"
+          items = [x for x in data["extensionList"]["extensions"] if x.get("packageName") == package]
+          if len(items) != 1:
+              raise SystemExit(f"Expected one Picacomic entry, got {len(items)}")
+          item = items[0]
+          if item.get("versionName") != "1.6.11":
+              raise SystemExit(f"Unexpected versionName: {item.get('versionName')}")
+          print("Handoff index validated:", item.get("versionName"), item.get("versionCode"))
+          PY
+
+      - name: Checkout production branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          path: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Copy exact production payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="handoff/production-handoff"
+          dst="repo"
+
+          cp "$src/index.pb" "$dst/index.pb"
+          cp "$src/index.json" "$dst/index.json"
+          cp "$src/index.min.json" "$dst/index.min.json"
+          cp "$src/index-android.pb" "$dst/index-android.pb"
+          cp "$src/index-android.json" "$dst/index-android.json"
+          cp "$src/index-android.min.json" "$dst/index-android.min.json"
+          cp "$src/published-state.json" "$dst/published-state.json"
+          cp "$src/tachiyomi-zh.picacomic-v1.6.11.apk" "$dst/tachiyomi-zh.picacomic-v1.6.11.apk"
+          cp "$src/tachiyomi-zh.picacomic-v1.6.11.jar" "$dst/tachiyomi-zh.picacomic-v1.6.11.jar"
+          mkdir -p "$dst/icon"
+          cp "$src/icon/eu.kanade.tachiyomi.extension.zh.picacomic-v106011.png"              "$dst/icon/eu.kanade.tachiyomi.extension.zh.picacomic-v106011.png"
+
+      - name: Verify exact binary hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for rel in             index.pb             index-android.pb             tachiyomi-zh.picacomic-v1.6.11.apk             tachiyomi-zh.picacomic-v1.6.11.jar             icon/eu.kanade.tachiyomi.extension.zh.picacomic-v106011.png
+          do
+            a="$(sha256sum "handoff/production-handoff/$rel" | awk '{print $1}')"
+            b="$(sha256sum "repo/$rel" | awk '{print $1}')"
+            [[ "$a" == "$b" ]] || { echo "::error::Hash mismatch: $rel"; exit 1; }
+            echo "$rel $b"
+          done
+
+      - name: Commit production branch
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Production branch already matches handoff"
+          else
+            git commit -m "Publish Picacomic v1.6.11"
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify repo branch content
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C repo fetch origin repo
+          git -C repo reset --hard origin/repo
+          test -f repo/tachiyomi-zh.picacomic-v1.6.11.apk
+          test -f repo/tachiyomi-zh.picacomic-v1.6.11.jar
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("repo/index.json").read_text("utf-8"))
+          package = "eu.kanade.tachiyomi.extension.zh.picacomic"
+          items = [x for x in data["extensionList"]["extensions"] if x.get("packageName") == package]
+          if len(items) != 1:
+              raise SystemExit(f"Production index Picacomic count={len(items)}")
+          print("Production index validated:", items[0].get("versionName"), items[0].get("versionCode"))
+          state = json.loads(Path("repo/published-state.json").read_text("utf-8"))
+          if package not in state:
+              raise SystemExit("Picacomic missing from published-state.json")
+          print("Production state validated")
+          PY
