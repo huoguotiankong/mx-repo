@@ -208,6 +208,17 @@
     "versionCode": 106002,
     "versionName": "1.6.2"
   },
+  "eu.kanade.tachiyomi.extension.zh.picacomic": {
+    "androidVersionCode": 212011,
+    "apk": "tachiyomi-zh.picacomic-v1.6.11.apk",
+    "apkSha256": "4b226772f80d9282d93692649c3a5ad9f9aa5e0f69152ef5bfe73209e825de47",
+    "jar": "tachiyomi-zh.picacomic-v1.6.11.jar",
+    "jarSha256": "e5a8c4fc084921e201df6d74075aa3cfd6222f846b32a3a6c135985da79c946f",
+    "module": "zh.picacomic",
+    "sourceHash": "83ce4d8f2f4cfccadcd50129e7528279e55befb4696d255f769a56e52e83e5d5",
+    "versionCode": 106011,
+    "versionName": "1.6.11"
+  },
   "eu.kanade.tachiyomi.extension.zh.qimanwu": {
     "androidVersionCode": 212001,
     "apk": "tachiyomi-zh.qimanwu-v1.6.1.apk",
