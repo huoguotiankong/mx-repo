@@ -12,12 +12,12 @@
         "name": "Bilibili Manga",
         "packageName": "eu.kanade.tachiyomi.extension.zh.bilibilimanga",
         "resources": {
-          "apkUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/apk/tachiyomi-zh.bilibilimanga-v1.6.17.apk",
-          "iconUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/icon/eu.kanade.tachiyomi.extension.zh.bilibilimanga-v106017.png"
+          "apkUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/apk/tachiyomi-zh.bilibilimanga-v1.6.18.apk",
+          "iconUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/icon/eu.kanade.tachiyomi.extension.zh.bilibilimanga-v106018.png"
         },
         "extensionLib": "1.6",
-        "versionCode": 106017,
-        "versionName": "1.6.17",
+        "versionCode": 106018,
+        "versionName": "1.6.18",
         "contentWarning": "SAFE",
         "sources": [
           {
