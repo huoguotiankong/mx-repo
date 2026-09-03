@@ -1,18 +1,18 @@
-name: Promote Picacomic Production Handoff
-# trigger: 2026-09-03 v12
+name: Promote Bilibili Manga Production Handoff
+# trigger: 2026-09-03 bilibilimanga v21
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - ".github/workflows/promote-picacomic.yml"
+      - ".github/workflows/promote-bilibilimanga.yml"
 
 permissions:
   contents: write
 
 concurrency:
-  group: promote-picacomic-production
+  group: promote-bilibilimanga-production
   cancel-in-progress: false
 
 jobs:
@@ -33,11 +33,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected="5dd59a55c6801d592fb569db06464b3e78f2f01a"
+          expected="a7db7228b643f2f0793c6214ec88fbd0928cdf21"
           actual="$(tr -d '\r\n' < handoff/production-handoff/SOURCE_SHA.txt)"
           [[ "$actual" == "$expected" ]] || { echo "::error::Unexpected source SHA: $actual"; exit 1; }
-          test -f handoff/production-handoff/tachiyomi-zh.picacomic-v1.6.12.apk
-          test -f handoff/production-handoff/tachiyomi-zh.picacomic-v1.6.12.jar
+          test -f handoff/production-handoff/tachiyomi-zh.bilibilimanga-v1.6.21.apk
+          test -f handoff/production-handoff/tachiyomi-zh.bilibilimanga-v1.6.21.jar
           test -f handoff/production-handoff/index.pb
           test -f handoff/production-handoff/index.json
           test -f handoff/production-handoff/published-state.json
@@ -45,12 +45,12 @@ jobs:
           import json
           from pathlib import Path
           data = json.loads(Path("handoff/production-handoff/index.json").read_text("utf-8"))
-          package = "eu.kanade.tachiyomi.extension.zh.picacomic"
+          package = "eu.kanade.tachiyomi.extension.zh.bilibilimanga"
           items = [x for x in data["extensionList"]["extensions"] if x.get("packageName") == package]
           if len(items) != 1:
-              raise SystemExit(f"Expected one Picacomic entry, got {len(items)}")
+              raise SystemExit(f"Expected one Bilibili Manga entry, got {len(items)}")
           item = items[0]
-          if item.get("versionName") != "1.6.12":
+          if item.get("versionName") != "1.6.21":
               raise SystemExit(f"Unexpected versionName: {item.get('versionName')}")
           print("Handoff index validated:", item.get("versionName"), item.get("versionCode"))
           PY
@@ -77,20 +77,20 @@ jobs:
           cp "$src/index-android.json" "$dst/index-android.json"
           cp "$src/index-android.min.json" "$dst/index-android.min.json"
           cp "$src/published-state.json" "$dst/published-state.json"
-          cp "$src/tachiyomi-zh.picacomic-v1.6.12.apk" "$dst/tachiyomi-zh.picacomic-v1.6.12.apk"
-          cp "$src/tachiyomi-zh.picacomic-v1.6.12.jar" "$dst/tachiyomi-zh.picacomic-v1.6.12.jar"
+          cp "$src/tachiyomi-zh.bilibilimanga-v1.6.21.apk" "$dst/tachiyomi-zh.bilibilimanga-v1.6.21.apk"
+          cp "$src/tachiyomi-zh.bilibilimanga-v1.6.21.jar" "$dst/tachiyomi-zh.bilibilimanga-v1.6.21.jar"
           mkdir -p "$dst/icon"
-          cp "$src/icon/eu.kanade.tachiyomi.extension.zh.picacomic-v106012.png" \
-             "$dst/icon/eu.kanade.tachiyomi.extension.zh.picacomic-v106012.png"
-          rm -f "$dst/tachiyomi-zh.picacomic-v1.6.11.apk"
-          rm -f "$dst/tachiyomi-zh.picacomic-v1.6.11.jar"
-          rm -f "$dst/icon/eu.kanade.tachiyomi.extension.zh.picacomic-v106011.png"
+          cp "$src/icon/eu.kanade.tachiyomi.extension.zh.bilibilimanga-v106021.png" \
+             "$dst/icon/eu.kanade.tachiyomi.extension.zh.bilibilimanga-v106021.png"
+          rm -f "$dst/tachiyomi-zh.bilibilimanga-v1.6.13.apk"
+          rm -f "$dst/tachiyomi-zh.bilibilimanga-v1.6.13.jar"
+          rm -f "$dst/icon/eu.kanade.tachiyomi.extension.zh.bilibilimanga-v106013.png"
 
       - name: Verify exact binary hashes
         shell: bash
         run: |
           set -euo pipefail
-          for rel in             index.pb             index-android.pb             tachiyomi-zh.picacomic-v1.6.12.apk             tachiyomi-zh.picacomic-v1.6.12.jar             icon/eu.kanade.tachiyomi.extension.zh.picacomic-v106012.png
+          for rel in             index.pb             index-android.pb             tachiyomi-zh.bilibilimanga-v1.6.21.apk             tachiyomi-zh.bilibilimanga-v1.6.21.jar             icon/eu.kanade.tachiyomi.extension.zh.bilibilimanga-v106021.png
           do
             a="$(sha256sum "handoff/production-handoff/$rel" | awk '{print $1}')"
             b="$(sha256sum "repo/$rel" | awk '{print $1}')"
@@ -109,7 +109,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "Production branch already matches handoff"
           else
-            git commit -m "Publish Picacomic v1.6.12"
+            git commit -m "Publish Bilibili Manga v1.6.21"
             git push origin HEAD:repo
           fi
 
@@ -119,19 +119,19 @@ jobs:
           set -euo pipefail
           git -C repo fetch origin repo
           git -C repo reset --hard origin/repo
-          test -f repo/tachiyomi-zh.picacomic-v1.6.12.apk
-          test -f repo/tachiyomi-zh.picacomic-v1.6.12.jar
+          test -f repo/tachiyomi-zh.bilibilimanga-v1.6.21.apk
+          test -f repo/tachiyomi-zh.bilibilimanga-v1.6.21.jar
           python3 - <<'PY'
           import json
           from pathlib import Path
           data = json.loads(Path("repo/index.json").read_text("utf-8"))
-          package = "eu.kanade.tachiyomi.extension.zh.picacomic"
+          package = "eu.kanade.tachiyomi.extension.zh.bilibilimanga"
           items = [x for x in data["extensionList"]["extensions"] if x.get("packageName") == package]
           if len(items) != 1:
-              raise SystemExit(f"Production index Picacomic count={len(items)}")
+              raise SystemExit(f"Production index Bilibili Manga count={len(items)}")
           print("Production index validated:", items[0].get("versionName"), items[0].get("versionCode"))
           state = json.loads(Path("repo/published-state.json").read_text("utf-8"))
           if package not in state:
-              raise SystemExit("Picacomic missing from published-state.json")
+              raise SystemExit("Bilibili Manga missing from published-state.json")
           print("Production state validated")
           PY
