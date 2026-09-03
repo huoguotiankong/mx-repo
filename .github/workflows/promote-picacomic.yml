@@ -6,7 +6,7 @@ on:
   push:
     branches: [main]
     paths:
-      - ".github/workflows/promote-bilibilimanga.yml"
+      - ".github/workflows/promote-picacomic.yml"
 
 permissions:
   contents: write
