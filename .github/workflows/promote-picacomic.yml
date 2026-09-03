@@ -1,5 +1,5 @@
-name: Promote Kuaikan Manhua Production Handoff
-# trigger: 2026-09-03 kuaikanmanhua v22
+name: Promote Picacomic Production Handoff
+# trigger: 2026-09-03 picacomic v13
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: promote-kuaikanmanhua-production
+  group: promote-picacomic-production
   cancel-in-progress: false
 
 jobs:
@@ -33,11 +33,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected="b8c7a42e0548be70478d5c6d77859a33d2cdece2"
+          expected="0a76b0d9dd3fb8656d86af98b8840b3ed18a7501"
           actual="$(tr -d '\r\n' < handoff/production-handoff/SOURCE_SHA.txt)"
           [[ "$actual" == "$expected" ]] || { echo "::error::Unexpected source SHA: $actual"; exit 1; }
-          test -f handoff/production-handoff/tachiyomi-zh.kuaikanmanhua-v1.6.22.apk
-          test -f handoff/production-handoff/tachiyomi-zh.kuaikanmanhua-v1.6.22.jar
+          test -f handoff/production-handoff/tachiyomi-zh.picacomic-v1.6.13.apk
+          test -f handoff/production-handoff/tachiyomi-zh.picacomic-v1.6.13.jar
           test -f handoff/production-handoff/index.pb
           test -f handoff/production-handoff/index.json
           test -f handoff/production-handoff/published-state.json
@@ -45,12 +45,12 @@ jobs:
           import json
           from pathlib import Path
           data = json.loads(Path("handoff/production-handoff/index.json").read_text("utf-8"))
-          package = "eu.kanade.tachiyomi.extension.zh.kuaikanmanhua"
+          package = "eu.kanade.tachiyomi.extension.zh.picacomic"
           items = [x for x in data["extensionList"]["extensions"] if x.get("packageName") == package]
           if len(items) != 1:
-              raise SystemExit(f"Expected one Kuaikan Manhua entry, got {len(items)}")
+              raise SystemExit(f"Expected one Picacomic entry, got {len(items)}")
           item = items[0]
-          if item.get("versionName") != "1.6.22":
+          if item.get("versionName") != "1.6.13":
               raise SystemExit(f"Unexpected versionName: {item.get('versionName')}")
           print("Handoff index validated:", item.get("versionName"), item.get("versionCode"))
           PY
@@ -77,20 +77,20 @@ jobs:
           cp "$src/index-android.json" "$dst/index-android.json"
           cp "$src/index-android.min.json" "$dst/index-android.min.json"
           cp "$src/published-state.json" "$dst/published-state.json"
-          cp "$src/tachiyomi-zh.kuaikanmanhua-v1.6.22.apk" "$dst/tachiyomi-zh.kuaikanmanhua-v1.6.22.apk"
-          cp "$src/tachiyomi-zh.kuaikanmanhua-v1.6.22.jar" "$dst/tachiyomi-zh.kuaikanmanhua-v1.6.22.jar"
+          cp "$src/tachiyomi-zh.picacomic-v1.6.13.apk" "$dst/tachiyomi-zh.picacomic-v1.6.13.apk"
+          cp "$src/tachiyomi-zh.picacomic-v1.6.13.jar" "$dst/tachiyomi-zh.picacomic-v1.6.13.jar"
           mkdir -p "$dst/icon"
-          cp "$src/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106022.png" \
-             "$dst/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106022.png"
-          rm -f "$dst/tachiyomi-zh.kuaikanmanhua-v1.6.21.apk"
-          rm -f "$dst/tachiyomi-zh.kuaikanmanhua-v1.6.21.jar"
-          rm -f "$dst/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106021.png"
+          cp "$src/icon/eu.kanade.tachiyomi.extension.zh.picacomic-v106013.png" \
+             "$dst/icon/eu.kanade.tachiyomi.extension.zh.picacomic-v106013.png"
+          rm -f "$dst/tachiyomi-zh.picacomic-v1.6.12.apk"
+          rm -f "$dst/tachiyomi-zh.picacomic-v1.6.12.jar"
+          rm -f "$dst/icon/eu.kanade.tachiyomi.extension.zh.picacomic-v106012.png"
 
       - name: Verify exact binary hashes
         shell: bash
         run: |
           set -euo pipefail
-          for rel in             index.pb             index-android.pb             tachiyomi-zh.kuaikanmanhua-v1.6.22.apk             tachiyomi-zh.kuaikanmanhua-v1.6.22.jar             icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106022.png
+          for rel in             index.pb             index-android.pb             tachiyomi-zh.picacomic-v1.6.13.apk             tachiyomi-zh.picacomic-v1.6.13.jar             icon/eu.kanade.tachiyomi.extension.zh.picacomic-v106013.png
           do
             a="$(sha256sum "handoff/production-handoff/$rel" | awk '{print $1}')"
             b="$(sha256sum "repo/$rel" | awk '{print $1}')"
@@ -109,7 +109,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "Production branch already matches handoff"
           else
-            git commit -m "Publish Kuaikan Manhua v1.6.22"
+            git commit -m "Publish Picacomic v1.6.13"
             git push origin HEAD:repo
           fi
 
@@ -119,19 +119,19 @@ jobs:
           set -euo pipefail
           git -C repo fetch origin repo
           git -C repo reset --hard origin/repo
-          test -f repo/tachiyomi-zh.kuaikanmanhua-v1.6.22.apk
-          test -f repo/tachiyomi-zh.kuaikanmanhua-v1.6.22.jar
+          test -f repo/tachiyomi-zh.picacomic-v1.6.13.apk
+          test -f repo/tachiyomi-zh.picacomic-v1.6.13.jar
           python3 - <<'PY'
           import json
           from pathlib import Path
           data = json.loads(Path("repo/index.json").read_text("utf-8"))
-          package = "eu.kanade.tachiyomi.extension.zh.kuaikanmanhua"
+          package = "eu.kanade.tachiyomi.extension.zh.picacomic"
           items = [x for x in data["extensionList"]["extensions"] if x.get("packageName") == package]
           if len(items) != 1:
-              raise SystemExit(f"Production index Kuaikan Manhua count={len(items)}")
+              raise SystemExit(f"Production index Picacomic count={len(items)}")
           print("Production index validated:", items[0].get("versionName"), items[0].get("versionCode"))
           state = json.loads(Path("repo/published-state.json").read_text("utf-8"))
           if package not in state:
-              raise SystemExit("Kuaikan Manhua missing from published-state.json")
+              raise SystemExit("Picacomic missing from published-state.json")
           print("Production state validated")
           PY
