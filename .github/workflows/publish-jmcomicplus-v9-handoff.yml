@@ -1,0 +1,82 @@
+name: Publish JMComic Plus v9 Handoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-jmcomicplus-v9-handoff.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-jmcomicplus-v9-handoff
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout validated v9 handoff payload
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: handoff/jmcomicplus-v9
+          path: handoff
+          persist-credentials: false
+
+      - name: Checkout distribution repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          path: dist
+          fetch-depth: 0
+
+      - name: Replace test store with validated v9 handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f handoff/apk/tachiyomi-zh.jmcomicplus-v1.6.9.apk
+          test -f handoff/icon/eu.kanade.tachiyomi.extension.zh.jmcomicplus-v106009.png
+          grep -q 'jmcomicplus' handoff/index.json
+          grep -Eq '1\.6\.9|106009|versionCode[^0-9]*9' handoff/index.json handoff/repo.json
+          mkdir -p dist/test
+          rsync -a --delete --exclude '.git/' handoff/ dist/test/
+
+      - name: Commit and publish test store
+        working-directory: dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add test
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "Test store already matches JMComic Plus v9 handoff"
+            exit 0
+          fi
+          git commit -m "Publish JMComic Plus test v9"
+          git push origin HEAD:repo
+
+      - name: Verify public endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test"
+          for attempt in 1 2 3 4 5 6 7 8; do
+            curl -fsSL "$base/index.json" -o /tmp/index.json || true
+            curl -fsSL "$base/repo.json" -o /tmp/repo.json || true
+            if grep -q 'jmcomicplus' /tmp/index.json 2>/dev/null && grep -Eq '1\.6\.9|106009' /tmp/index.json /tmp/repo.json 2>/dev/null; then
+              apk_url="$base/apk/tachiyomi-zh.jmcomicplus-v1.6.9.apk"
+              icon_url="$base/icon/eu.kanade.tachiyomi.extension.zh.jmcomicplus-v106009.png"
+              curl -fsSI "$apk_url" >/dev/null
+              curl -fsSI "$icon_url" >/dev/null
+              exit 0
+            fi
+            sleep $((attempt * 2))
+          done
+          echo "::error::JMComic Plus v9 public test endpoints did not converge"
+          exit 1
