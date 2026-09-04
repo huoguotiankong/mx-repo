@@ -1,4 +1,4 @@
-name: Publish Kuaikan v25 Production Handoff
+name: Publish Kuaikan v26 Production Handoff
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: publish-kuaikan-v25-production-handoff
+  group: publish-kuaikan-v26-production-handoff
   cancel-in-progress: false
 
 jobs:
@@ -34,22 +34,22 @@ jobs:
           path: dist
           fetch-depth: 0
 
-      - name: Verify and stage Kuaikan v25 payload
+      - name: Verify and stage Kuaikan v26 payload
         shell: bash
         run: |
           set -euo pipefail
           payload="handoff/production-handoff"
-          expected_sha="c31396825857df0df3325d5e783ef28715a811e0"
+          expected_sha="3cf9b769b4d2574b7740db498e54dd915aad325f"
           [[ "$(tr -d '\r\n' < "$payload/SOURCE_SHA.txt")" == "$expected_sha" ]] || {
-            echo "::error::Production handoff source SHA is not Kuaikan v25"
+            echo "::error::Production handoff source SHA is not Kuaikan v26"
             exit 1
           }
-          test -f "$payload/tachiyomi-zh.kuaikanmanhua-v1.6.25.apk"
-          test -f "$payload/tachiyomi-zh.kuaikanmanhua-v1.6.25.jar"
-          test -f "$payload/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106025.png"
+          test -f "$payload/tachiyomi-zh.kuaikanmanhua-v1.6.26.apk"
+          test -f "$payload/tachiyomi-zh.kuaikanmanhua-v1.6.26.jar"
+          test -f "$payload/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106026.png"
           grep -q 'eu.kanade.tachiyomi.extension.zh.kuaikanmanhua' "$payload/index.json"
-          grep -q '1.6.25' "$payload/index.json"
-          grep -q '106025' "$payload/index.json"
+          grep -q '1.6.26' "$payload/index.json"
+          grep -q '106026' "$payload/index.json"
 
           cp "$payload/index.json" dist/index.json
           cp "$payload/index.min.json" dist/index.min.json
@@ -59,11 +59,12 @@ jobs:
           cp "$payload/index-android.pb" dist/index-android.pb
           cp "$payload/published-state.json" dist/published-state.json
           mkdir -p dist/icon
-          cp "$payload/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106025.png" dist/icon/
-          cp "$payload/tachiyomi-zh.kuaikanmanhua-v1.6.25.apk" dist/
-          cp "$payload/tachiyomi-zh.kuaikanmanhua-v1.6.25.jar" dist/
-          rm -f dist/tachiyomi-zh.kuaikanmanhua-v1.6.24.apk
-          rm -f dist/tachiyomi-zh.kuaikanmanhua-v1.6.24.jar
+          cp "$payload/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106026.png" dist/icon/
+          cp "$payload/tachiyomi-zh.kuaikanmanhua-v1.6.26.apk" dist/
+          cp "$payload/tachiyomi-zh.kuaikanmanhua-v1.6.26.jar" dist/
+          rm -f dist/tachiyomi-zh.kuaikanmanhua-v1.6.25.apk
+          rm -f dist/tachiyomi-zh.kuaikanmanhua-v1.6.25.jar
+          rm -f dist/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106025.png
 
       - name: Commit production repository
         working-directory: dist
@@ -75,14 +76,14 @@ jobs:
           git add -A
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo "Kuaikan v25 is already published"
+            echo "Kuaikan v26 is already published"
           else
-            git commit -m "Publish Kuaikan Manhua v25"
+            git commit -m "Publish Kuaikan Manhua v26"
             git pull --rebase origin repo
             git push origin HEAD:repo
           fi
 
-      - name: Verify public Kuaikan v25
+      - name: Verify public Kuaikan v26
         shell: bash
         run: |
           set -euo pipefail
@@ -90,12 +91,12 @@ jobs:
           for attempt in 1 2 3 4 5 6; do
             curl -fsSL "$base/index.json?attempt=$attempt" -o /tmp/index.json || true
             if grep -q 'eu.kanade.tachiyomi.extension.zh.kuaikanmanhua' /tmp/index.json 2>/dev/null && \
-               grep -q '1.6.25' /tmp/index.json 2>/dev/null && \
-               grep -q '106025' /tmp/index.json 2>/dev/null; then
-              curl -fsSI "$base/tachiyomi-zh.kuaikanmanhua-v1.6.25.apk" >/dev/null
+               grep -q '1.6.26' /tmp/index.json 2>/dev/null && \
+               grep -q '106026' /tmp/index.json 2>/dev/null; then
+              curl -fsSI "$base/tachiyomi-zh.kuaikanmanhua-v1.6.26.apk" >/dev/null
               exit 0
             fi
             sleep $((attempt * 2))
           done
-          echo "::error::Kuaikan v25 public endpoints did not converge"
+          echo "::error::Kuaikan v26 public endpoints did not converge"
           exit 1
