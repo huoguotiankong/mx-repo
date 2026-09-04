@@ -1,0 +1,91 @@
+name: Promote CopyManga Plus Test Payload
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-copymangaplus-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-copymangaplus-test
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout staged payload
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: extension-staging
+          path: staged
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify staged CopyManga Plus artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="staged/test/apk/tachiyomi-zh.copymangaplus-v1.6.1.apk"
+          icon="staged/test/icon/eu.kanade.tachiyomi.extension.zh.copymangaplus-v106001.png"
+          test -f "$apk"
+          test -f "$icon"
+          [[ "$(stat -c %s "$apk")" == "53247" ]] || { echo "::error::Unexpected staged APK size"; exit 1; }
+          [[ "$(sha256sum "$apk" | awk '{print $1}')" == "0833cc9c19d9fa42730ac2168a815b80e9d627831a724b0b7c2007ae90f21cb8" ]] || { echo "::error::Unexpected staged APK digest"; exit 1; }
+          [[ "$(sha256sum "$icon" | awk '{print $1}')" == "59673ff68e4648083510865c7ea9fe9c29d19daa32ad55e34235ecc6df8c11e9" ]] || { echo "::error::Unexpected staged icon digest"; exit 1; }
+
+      - name: Checkout public repo branch
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-repo
+          ref: repo
+          token: ${{ github.token }}
+          path: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Copy exact signed test artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repo/test/apk repo/test/icon
+          cp staged/test/apk/tachiyomi-zh.copymangaplus-v1.6.1.apk repo/test/apk/
+          cp staged/test/icon/eu.kanade.tachiyomi.extension.zh.copymangaplus-v106001.png repo/test/icon/
+
+      - name: Commit exact test artifacts
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add test/apk/tachiyomi-zh.copymangaplus-v1.6.1.apk test/icon/eu.kanade.tachiyomi.extension.zh.copymangaplus-v106001.png
+          if git diff --cached --quiet; then
+            echo "No CopyManga Plus artifact changes"
+          else
+            git commit -m "Fix CopyManga Plus signed test artifacts"
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify public APK bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test/apk/tachiyomi-zh.copymangaplus-v1.6.1.apk"
+          ok=0
+          for attempt in 1 2 3 4 5 6; do
+            status="$(curl -L -sS -o /tmp/copymangaplus.apk -w '%{http_code}' "$url" || true)"
+            if [[ "$status" == "200" ]] && [[ "$(stat -c %s /tmp/copymangaplus.apk)" == "53247" ]]; then
+              ok=1
+              break
+            fi
+            sleep $((attempt * 2))
+          done
+          [[ "$ok" -eq 1 ]] || { echo "::error::Public CopyManga Plus APK unavailable or wrong size"; exit 1; }
+          [[ "$(sha256sum /tmp/copymangaplus.apk | awk '{print $1}')" == "0833cc9c19d9fa42730ac2168a815b80e9d627831a724b0b7c2007ae90f21cb8" ]] || { echo "::error::Public APK digest mismatch"; exit 1; }
