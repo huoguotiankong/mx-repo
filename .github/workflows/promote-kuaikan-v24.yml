@@ -69,7 +69,7 @@ jobs:
 
           android = json.loads(Path("index-android.json").read_text(encoding="utf-8"))
           ext_android = next((x for x in android["extensionList"]["extensions"] if x.get("packageName") == pkg), None)
-          if ext_android is None or ext_android.get("versionName") != "1.6.24" or int(ext_android.get("versionCode", -1)) != 106024:
+          if ext_android is None or ext_android.get("versionName") != "1.6.24" or int(ext_android.get("versionCode", -1)) != 212024:
               raise SystemExit(f"Unexpected Android compatibility index entry: {ext_android}")
           PY
 
