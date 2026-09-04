@@ -1,0 +1,78 @@
+name: Publish JMComic Plus v4 Test Artifact
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-jmcomicplus-v4.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          path: repo
+          fetch-depth: 0
+
+      - name: Download validated test store artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --retry-delay 2 \
+            'https://sdmntprwestus3.oaiusercontent.com/files/00000000-22c8-81fd-8862-82758839e099/raw?se=2026-09-04T00%3A45%3A35Z&sp=r&sv=2026-02-06&sr=b&scid=b66ce8b4-ef65-5e30-9d1d-ae2f71e4524a&skoid=5e713cdb-766b-475e-a3ca-8adb6cf99aa0&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-03T21%3A08%3A02Z&ske=2026-09-04T21%3A08%3A02Z&sks=b&skv=2026-02-06&sig=9uxiDLeie9KHbC4kBEZbyBjJ4Dqz6tkKbJ7P%2Be9AcLg%3D' \
+            -o /tmp/jmcomicplus-v4-test-store.zip
+          rm -rf /tmp/jmstore
+          mkdir -p /tmp/jmstore
+          unzip -q /tmp/jmcomicplus-v4-test-store.zip -d /tmp/jmstore
+          test -f /tmp/jmstore/index.json
+          test -f /tmp/jmstore/apk/tachiyomi-zh.jmcomicplus-v1.6.4.apk
+          test -f /tmp/jmstore/icon/eu.kanade.tachiyomi.extension.zh.jmcomicplus-v106004.png
+          grep -q 'eu.kanade.tachiyomi.extension.zh.jmcomicplus' /tmp/jmstore/index.json
+          grep -q '"versionName": "1.6.4"' /tmp/jmstore/index.json
+          grep -q '"versionCode": 106004' /tmp/jmstore/index.json
+
+      - name: Install only JMComic Plus test files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repo/test/apk repo/test/icon
+          cp /tmp/jmstore/index.json repo/test/index.json
+          cp /tmp/jmstore/apk/tachiyomi-zh.jmcomicplus-v1.6.4.apk repo/test/apk/
+          cp /tmp/jmstore/icon/eu.kanade.tachiyomi.extension.zh.jmcomicplus-v106004.png repo/test/icon/
+
+      - name: Commit and push test store
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add test/index.json test/apk/tachiyomi-zh.jmcomicplus-v1.6.4.apk test/icon/eu.kanade.tachiyomi.extension.zh.jmcomicplus-v106004.png
+          if git diff --cached --quiet; then
+            echo "JMComic Plus v4 test files already published"
+            exit 0
+          fi
+          git commit -m "Publish JMComic Plus test v4"
+          git push origin HEAD:repo
+
+      - name: Verify public test endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test'
+          ok=0
+          for attempt in 1 2 3 4 5; do
+            if curl -fsSL "$base/index.json" | grep -q 'eu.kanade.tachiyomi.extension.zh.jmcomicplus'; then
+              ok=1
+              break
+            fi
+            sleep $((attempt * 2))
+          done
+          [[ "$ok" -eq 1 ]] || { echo '::error::JMComic Plus missing from published test index'; exit 1; }
+          curl -fsI -L "$base/apk/tachiyomi-zh.jmcomicplus-v1.6.4.apk" >/dev/null
