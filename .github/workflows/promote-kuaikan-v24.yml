@@ -64,12 +64,12 @@ jobs:
           pkg = "eu.kanade.tachiyomi.extension.zh.kuaikanmanhua"
           data = json.loads(Path("index.json").read_text(encoding="utf-8"))
           ext = next((x for x in data["extensionList"]["extensions"] if x.get("packageName") == pkg), None)
-          if ext is None or ext.get("versionName") != "1.6.24" or int(ext.get("versionCode", -1)) != 24:
+          if ext is None or ext.get("versionName") != "1.6.24" or int(ext.get("versionCode", -1)) != 106024:
               raise SystemExit(f"Unexpected production index entry: {ext}")
 
           android = json.loads(Path("index-android.json").read_text(encoding="utf-8"))
           ext_android = next((x for x in android["extensionList"]["extensions"] if x.get("packageName") == pkg), None)
-          if ext_android is None or int(ext_android.get("versionCode", -1)) != 106024:
+          if ext_android is None or ext_android.get("versionName") != "1.6.24" or int(ext_android.get("versionCode", -1)) != 106024:
               raise SystemExit(f"Unexpected Android compatibility index entry: {ext_android}")
           PY
 
