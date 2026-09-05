@@ -1,0 +1,62 @@
+name: Publish Zaimanhua Plus v1.4.2 Test Artifacts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-zaimanhuaplus-v142.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-zaimanhuaplus-v142
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Import already validated test snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://raw.githubusercontent.com/huoguotiankong/mx-build/extension-staging/test'
+          mkdir -p test/apk test/icon
+          curl --fail --location --retry 3 --silent --show-error \
+            "$base/apk/tachiyomi-zh.zaimanhuaplus-v1.4.2.apk" \
+            -o test/apk/tachiyomi-zh.zaimanhuaplus-v1.4.2.apk
+          curl --fail --location --retry 3 --silent --show-error \
+            "$base/icon/eu.kanade.tachiyomi.extension.zh.zaimanhuaplus-v104002.png" \
+            -o test/icon/eu.kanade.tachiyomi.extension.zh.zaimanhuaplus-v104002.png
+          curl --fail --location --retry 3 --silent --show-error \
+            "$base/index.json" -o test/index.json
+          rm -f test/apk/tachiyomi-zh.zaimanhuaplus-v1.4.1.apk
+          rm -f test/icon/eu.kanade.tachiyomi.extension.zh.zaimanhuaplus-v104001.png
+          grep -q 'tachiyomi-zh.zaimanhuaplus-v1.4.2.apk' test/index.json
+          test -s test/apk/tachiyomi-zh.zaimanhuaplus-v1.4.2.apk
+          test -s test/icon/eu.kanade.tachiyomi.extension.zh.zaimanhuaplus-v104002.png
+
+      - name: Publish to public test store
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Zaimanhua Plus v1.4.2 test store already current'
+          else
+            git commit -m 'Publish Zaimanhua Plus v1.4.2 login and icon fix'
+            git push origin HEAD:repo
+          fi
