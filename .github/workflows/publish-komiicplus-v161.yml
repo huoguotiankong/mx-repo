@@ -45,6 +45,9 @@ jobs:
           icon='eu.kanade.tachiyomi.extension.zh.komiicplus-v106001.png'
           test -f "staging/test/apk/$apk"
           test -f "staging/test/icon/$icon"
+          test -f "staging/test/index.json"
+          test -f "repo/test/index.json"
+          test -f "repo/test/repo.json"
           mkdir -p repo/test/apk repo/test/icon
           cp "staging/test/apk/$apk" "repo/test/apk/$apk"
           cp "staging/test/icon/$icon" "repo/test/icon/$icon"
@@ -54,27 +57,30 @@ jobs:
           from pathlib import Path
 
           package = 'eu.kanade.tachiyomi.extension.zh.komiicplus'
-          for filename in ('index.json', 'repo.json'):
-              dst = Path('repo/test') / filename
-              src = Path('staging/test') / filename
-              current = json.loads(dst.read_text('utf-8'))
-              staged = json.loads(src.read_text('utf-8'))
-              source_entries = staged['extensionList']['extensions']
-              match = [x for x in source_entries if x['packageName'] == package]
-              if len(match) != 1:
-                  raise SystemExit(f'{filename}: expected one staged Komiic Plus entry, got {len(match)}')
-              entry = match[0]
-              if (entry['versionName'], entry['versionCode']) != ('1.6.1', 106001):
-                  raise SystemExit(f'{filename}: unexpected version {entry["versionName"]}/{entry["versionCode"]}')
-              entries = [x for x in current['extensionList']['extensions'] if x['packageName'] != package]
-              entries.append(entry)
-              entries.sort(key=lambda x: (x.get('name') or '').lower())
-              current['extensionList']['extensions'] = entries
-              dst.write_text(json.dumps(current, ensure_ascii=False, indent=2) + '\n', 'utf-8')
+          dst = Path('repo/test/index.json')
+          src = Path('staging/test/index.json')
+          current = json.loads(dst.read_text('utf-8'))
+          staged = json.loads(src.read_text('utf-8'))
+          source_entries = staged['extensionList']['extensions']
+          match = [x for x in source_entries if x['packageName'] == package]
+          if len(match) != 1:
+              raise SystemExit(f'index.json: expected one staged Komiic Plus entry, got {len(match)}')
+          entry = match[0]
+          if (entry['versionName'], entry['versionCode']) != ('1.6.1', 106001):
+              raise SystemExit(f'index.json: unexpected version {entry["versionName"]}/{entry["versionCode"]}')
+          entries = [x for x in current['extensionList']['extensions'] if x['packageName'] != package]
+          entries.append(entry)
+          entries.sort(key=lambda x: (x.get('name') or '').lower())
+          current['extensionList']['extensions'] = entries
+          dst.write_text(json.dumps(current, ensure_ascii=False, indent=2) + '\n', 'utf-8')
+
+          repo_meta = json.loads(Path('repo/test/repo.json').read_text('utf-8'))
+          if repo_meta.get('index_v2') != 'https://github.com/huoguotiankong/mx-repo/raw/repo/test/index.json':
+              raise SystemExit('repo.json: unexpected index_v2 pointer')
           PY
 
           grep -q 'tachiyomi-zh.komiicplus-v1.6.1.apk' repo/test/index.json
-          grep -q 'tachiyomi-zh.komiicplus-v1.6.1.apk' repo/test/repo.json
+          grep -q 'eu.kanade.tachiyomi.extension.zh.komiicplus' repo/test/index.json
 
       - name: Publish public test store
         working-directory: repo
