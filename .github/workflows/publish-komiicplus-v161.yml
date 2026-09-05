@@ -1,0 +1,93 @@
+name: Publish Komiic Plus v1.6.1 Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-komiicplus-v161.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-komiicplus-v161-test
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout public repo branch
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-repo
+          ref: repo
+          path: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout validated staging snapshot
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: extension-staging
+          path: staging
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Import only Komiic Plus v1.6.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='tachiyomi-zh.komiicplus-v1.6.1.apk'
+          icon='eu.kanade.tachiyomi.extension.zh.komiicplus-v106001.png'
+          test -f "staging/test/apk/$apk"
+          test -f "staging/test/icon/$icon"
+          mkdir -p repo/test/apk repo/test/icon
+          cp "staging/test/apk/$apk" "repo/test/apk/$apk"
+          cp "staging/test/icon/$icon" "repo/test/icon/$icon"
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          package = 'eu.kanade.tachiyomi.extension.zh.komiicplus'
+          for filename in ('index.json', 'repo.json'):
+              dst = Path('repo/test') / filename
+              src = Path('staging/test') / filename
+              current = json.loads(dst.read_text('utf-8'))
+              staged = json.loads(src.read_text('utf-8'))
+              source_entries = staged['extensionList']['extensions']
+              match = [x for x in source_entries if x['packageName'] == package]
+              if len(match) != 1:
+                  raise SystemExit(f'{filename}: expected one staged Komiic Plus entry, got {len(match)}')
+              entry = match[0]
+              if (entry['versionName'], entry['versionCode']) != ('1.6.1', 106001):
+                  raise SystemExit(f'{filename}: unexpected version {entry["versionName"]}/{entry["versionCode"]}')
+              entries = [x for x in current['extensionList']['extensions'] if x['packageName'] != package]
+              entries.append(entry)
+              entries.sort(key=lambda x: (x.get('name') or '').lower())
+              current['extensionList']['extensions'] = entries
+              dst.write_text(json.dumps(current, ensure_ascii=False, indent=2) + '\n', 'utf-8')
+          PY
+
+          grep -q 'tachiyomi-zh.komiicplus-v1.6.1.apk' repo/test/index.json
+          grep -q 'tachiyomi-zh.komiicplus-v1.6.1.apk' repo/test/repo.json
+
+      - name: Publish public test store
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Komiic Plus v1.6.1 test store already current'
+          else
+            git commit -m 'Publish Komiic Plus v1.6.1 test store'
+            git push origin HEAD:repo
+          fi
