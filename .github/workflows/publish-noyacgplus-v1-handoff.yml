@@ -1,0 +1,106 @@
+name: Publish NoyAcg Plus v1 Production Handoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-noyacgplus-v1-handoff.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-noyacgplus-v1-production-handoff
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout validated NoyAcg Plus production handoff
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: extension-staging
+          path: handoff
+          persist-credentials: false
+
+      - name: Checkout distribution repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          path: dist
+          fetch-depth: 0
+
+      - name: Verify and stage NoyAcg Plus v1 payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="handoff/production-handoff"
+          expected_sha="01f1e2f86bcb5ed3461f5bd36fca50fb38b0548c"
+          package="eu.kanade.tachiyomi.extension.zh.noyacgplus"
+          apk="tachiyomi-zh.noyacgplus-v1.6.1.apk"
+          jar="tachiyomi-zh.noyacgplus-v1.6.1.jar"
+          icon="icon/${package}-v106001.png"
+
+          [[ "$(tr -d '\r\n' < "$payload/SOURCE_SHA.txt")" == "$expected_sha" ]] || {
+            echo "::error::Production handoff source SHA is not NoyAcg Plus v1"
+            exit 1
+          }
+          test -f "$payload/$apk"
+          test -f "$payload/$jar"
+          test -f "$payload/$icon"
+          grep -q "$package" "$payload/index.json"
+          grep -q '1.6.1' "$payload/index.json"
+          grep -q '106001' "$payload/index.json"
+
+          cp "$payload/index.json" dist/index.json
+          cp "$payload/index.min.json" dist/index.min.json
+          cp "$payload/index.pb" dist/index.pb
+          cp "$payload/index-android.json" dist/index-android.json
+          cp "$payload/index-android.min.json" dist/index-android.min.json
+          cp "$payload/index-android.pb" dist/index-android.pb
+          cp "$payload/published-state.json" dist/published-state.json
+          mkdir -p dist/icon
+          cp "$payload/$icon" "dist/$icon"
+          cp "$payload/$apk" dist/
+          cp "$payload/$jar" dist/
+
+      - name: Commit production repository
+        working-directory: dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "NoyAcg Plus v1 is already published"
+          else
+            git commit -m "Publish NoyAcg Plus v1.6.1"
+            git pull --rebase origin repo
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify public NoyAcg Plus v1
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo"
+          package="eu.kanade.tachiyomi.extension.zh.noyacgplus"
+          apk="tachiyomi-zh.noyacgplus-v1.6.1.apk"
+          for attempt in 1 2 3 4 5 6; do
+            curl -fsSL "$base/index.json?attempt=$attempt" -o /tmp/index.json || true
+            if grep -q "$package" /tmp/index.json 2>/dev/null && \
+               grep -q '1.6.1' /tmp/index.json 2>/dev/null && \
+               grep -q '106001' /tmp/index.json 2>/dev/null; then
+              curl -fsSI "$base/$apk" >/dev/null
+              exit 0
+            fi
+            sleep $((attempt * 2))
+          done
+          echo "::error::NoyAcg Plus v1 public endpoints did not converge"
+          exit 1
