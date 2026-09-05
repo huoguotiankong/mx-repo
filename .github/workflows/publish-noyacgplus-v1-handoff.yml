@@ -1,5 +1,5 @@
-name: Publish NoyAcg Plus v1 Production Handoff
-# Publish retry after validated production build handoff 01f1e2f.
+name: Publish NoyAcg Plus v2 Production Handoff
+# Publish validated production handoff for NoyAcg Plus v1.6.2.
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: publish-noyacgplus-v1-production-handoff
+  group: publish-noyacgplus-v2-production-handoff
   cancel-in-progress: false
 
 jobs:
@@ -35,27 +35,27 @@ jobs:
           path: dist
           fetch-depth: 0
 
-      - name: Verify and stage NoyAcg Plus v1 payload
+      - name: Verify and stage NoyAcg Plus v2 payload
         shell: bash
         run: |
           set -euo pipefail
           payload="handoff/production-handoff"
-          expected_sha="01f1e2f86bcb5ed3461f5bd36fca50fb38b0548c"
+          expected_sha="4e6af250004875e82b23ec29263a0957792d46e0"
           package="eu.kanade.tachiyomi.extension.zh.noyacgplus"
-          apk="tachiyomi-zh.noyacgplus-v1.6.1.apk"
-          jar="tachiyomi-zh.noyacgplus-v1.6.1.jar"
-          icon="icon/${package}-v106001.png"
+          apk="tachiyomi-zh.noyacgplus-v1.6.2.apk"
+          jar="tachiyomi-zh.noyacgplus-v1.6.2.jar"
+          icon="icon/${package}-v106002.png"
 
           [[ "$(tr -d '\r\n' < "$payload/SOURCE_SHA.txt")" == "$expected_sha" ]] || {
-            echo "::error::Production handoff source SHA is not NoyAcg Plus v1"
+            echo "::error::Production handoff source SHA is not NoyAcg Plus v1.6.2"
             exit 1
           }
           test -f "$payload/$apk"
           test -f "$payload/$jar"
           test -f "$payload/$icon"
           grep -q "$package" "$payload/index.json"
-          grep -q '1.6.1' "$payload/index.json"
-          grep -q '106001' "$payload/index.json"
+          grep -q '1.6.2' "$payload/index.json"
+          grep -q '106002' "$payload/index.json"
 
           cp "$payload/index.json" dist/index.json
           cp "$payload/index.min.json" dist/index.min.json
@@ -79,29 +79,29 @@ jobs:
           git add -A
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo "NoyAcg Plus v1 is already published"
+            echo "NoyAcg Plus v1.6.2 is already published"
           else
-            git commit -m "Publish NoyAcg Plus v1.6.1"
+            git commit -m "Publish NoyAcg Plus v1.6.2"
             git pull --rebase origin repo
             git push origin HEAD:repo
           fi
 
-      - name: Verify public NoyAcg Plus v1
+      - name: Verify public NoyAcg Plus v2
         shell: bash
         run: |
           set -euo pipefail
           base="https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo"
           package="eu.kanade.tachiyomi.extension.zh.noyacgplus"
-          apk="tachiyomi-zh.noyacgplus-v1.6.1.apk"
+          apk="tachiyomi-zh.noyacgplus-v1.6.2.apk"
           for attempt in 1 2 3 4 5 6; do
             curl -fsSL "$base/index.json?attempt=$attempt" -o /tmp/index.json || true
             if grep -q "$package" /tmp/index.json 2>/dev/null && \
-               grep -q '1.6.1' /tmp/index.json 2>/dev/null && \
-               grep -q '106001' /tmp/index.json 2>/dev/null; then
+               grep -q '1.6.2' /tmp/index.json 2>/dev/null && \
+               grep -q '106002' /tmp/index.json 2>/dev/null; then
               curl -fsSI "$base/$apk" >/dev/null
               exit 0
             fi
             sleep $((attempt * 2))
           done
-          echo "::error::NoyAcg Plus v1 public endpoints did not converge"
+          echo "::error::NoyAcg Plus v1.6.2 public endpoints did not converge"
           exit 1
