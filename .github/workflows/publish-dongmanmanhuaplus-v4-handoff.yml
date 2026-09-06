@@ -1,0 +1,156 @@
+name: Publish Dongman Manhua Plus v1.6.4 handoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-dongmanmanhuaplus-v4-handoff.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-dongmanmanhuaplus-v4-handoff
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout validated production handoff
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: extension-staging
+          path: handoff
+          persist-credentials: false
+
+      - name: Checkout distribution repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          path: dist
+          fetch-depth: 0
+
+      - name: Verify staged production payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_sha='9460c1fc42fcd0f9443ccb73d834ba8011e25032'
+          pkg='eu.kanade.tachiyomi.extension.zh.dongmanmanhuaplus'
+          apk='tachiyomi-zh.dongmanmanhuaplus-v1.6.4.apk'
+          jar='tachiyomi-zh.dongmanmanhuaplus-v1.6.4.jar'
+          prod='handoff/production-handoff'
+
+          test "$(tr -d '\r\n' < "$prod/SOURCE_SHA.txt")" = "$expected_sha"
+          test -f "$prod/$apk"
+          test -f "$prod/$jar"
+          test -f "$prod/index.json"
+          test -f "$prod/index.pb"
+          test -f "$prod/index-android.json"
+          test -f "$prod/index-android.pb"
+          test -f "$prod/icon/${pkg}-v106004.png"
+
+          python3 - <<'PY'
+          import json
+          pkg='eu.kanade.tachiyomi.extension.zh.dongmanmanhuaplus'
+          for path in [
+              'handoff/production-handoff/index.json',
+              'handoff/production-handoff/index-android.json',
+          ]:
+              d=json.load(open(path, encoding='utf-8'))
+              e=[x for x in d['extensionList']['extensions'] if x['packageName']==pkg]
+              assert len(e)==1, (path, len(e))
+              e=e[0]
+              assert e['versionName']=='1.6.4', (path, e)
+              assert int(e['versionCode'])==106004, (path, e)
+              assert e['sources'][0]['language']=='zh', (path, e)
+              assert int(e['sources'][0]['id'])==4940002032762570168, (path, e)
+              print('verified', path, e['versionName'], e['versionCode'], e['sources'][0]['language'])
+          PY
+
+      - name: Stage formal repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          prod='handoff/production-handoff'
+          pkg='eu.kanade.tachiyomi.extension.zh.dongmanmanhuaplus'
+
+          while IFS= read -r -d '' file; do
+            rel="${file#$prod/}"
+            test "$rel" = 'SOURCE_SHA.txt' && continue
+            mkdir -p "dist/$(dirname "$rel")"
+            cp -a "$file" "dist/$rel"
+          done < <(find "$prod" -type f -print0)
+
+          rm -f \
+            dist/tachiyomi-zh.dongmanmanhuaplus-v1.6.1.apk \
+            dist/tachiyomi-zh.dongmanmanhuaplus-v1.6.1.jar \
+            dist/tachiyomi-zh.dongmanmanhuaplus-v1.6.3.apk \
+            dist/tachiyomi-zh.dongmanmanhuaplus-v1.6.3.jar \
+            "dist/icon/${pkg}-v106001.png" \
+            "dist/icon/${pkg}-v106003.png"
+
+          python3 - <<'PY'
+          import json
+          pkg='eu.kanade.tachiyomi.extension.zh.dongmanmanhuaplus'
+          for path in ['dist/index.json','dist/index-android.json']:
+              d=json.load(open(path, encoding='utf-8'))
+              e=[x for x in d['extensionList']['extensions'] if x['packageName']==pkg][0]
+              assert e['versionName']=='1.6.4', (path,e)
+              assert int(e['versionCode'])==106004, (path,e)
+              assert e['sources'][0]['language']=='zh', (path,e)
+              assert int(e['sources'][0]['id'])==4940002032762570168, (path,e)
+          PY
+
+      - name: Commit formal repository
+        working-directory: dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Dongman Manhua Plus v1.6.4 is already published'
+          else
+            git commit -m 'Publish Dongman Manhua Plus v1.6.4'
+            git pull --rebase origin repo
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify public formal store
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo'
+          apk='tachiyomi-zh.dongmanmanhuaplus-v1.6.4.apk'
+          ok=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            curl -fsSL "$base/index.json?attempt=$attempt" -o /tmp/formal.json || true
+            if FORMAL=/tmp/formal.json python3 - <<'PY'
+          import json, os, sys
+          pkg='eu.kanade.tachiyomi.extension.zh.dongmanmanhuaplus'
+          try:
+              d=json.load(open(os.environ['FORMAL'], encoding='utf-8'))
+              e=[x for x in d['extensionList']['extensions'] if x['packageName']==pkg][0]
+              assert e['versionName']=='1.6.4'
+              assert int(e['versionCode'])==106004
+              assert e['sources'][0]['language']=='zh'
+              assert int(e['sources'][0]['id'])==4940002032762570168
+          except Exception as exc:
+              print(exc)
+              sys.exit(1)
+          PY
+            then
+              curl -fsSI "$base/$apk?attempt=$attempt" >/dev/null
+              ok=1
+              break
+            fi
+            sleep $((attempt * 2))
+          done
+          test "$ok" = 1
+          echo 'Public formal store verified at Dongman Manhua Plus v1.6.4 / 106004 / zh'
