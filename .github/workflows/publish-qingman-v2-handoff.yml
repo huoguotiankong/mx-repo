@@ -61,7 +61,11 @@ jobs:
           PAYLOAD="$payload" PACKAGE="$package" python3 - <<'PY'
           import json, os
           from pathlib import Path
-          for name in ("index.json", "index-android.json"):
+          expected_codes = {
+              "index.json": "106002",
+              "index-android.json": "212002",
+          }
+          for name, expected_code in expected_codes.items():
               data = json.loads((Path(os.environ["PAYLOAD"]) / name).read_text("utf-8"))
               items = [x for x in data["extensionList"]["extensions"] if x.get("packageName") == os.environ["PACKAGE"]]
               if len(items) != 1:
@@ -69,8 +73,8 @@ jobs:
               item = items[0]
               if item.get("versionName") != "1.6.2":
                   raise SystemExit(f"{name}: wrong versionName {item.get('versionName')}")
-              if str(item.get("versionCode")) != "106002":
-                  raise SystemExit(f"{name}: wrong versionCode {item.get('versionCode')}")
+              if str(item.get("versionCode")) != expected_code:
+                  raise SystemExit(f"{name}: wrong versionCode {item.get('versionCode')}, expected {expected_code}")
               sources = item.get("sources") or []
               if len(sources) != 1 or sources[0].get("language") != "zh":
                   raise SystemExit(f"{name}: Qingman language is not zh")
@@ -119,8 +123,12 @@ jobs:
             if PACKAGE="$package" python3 - <<'PY'
           import json, os
           from pathlib import Path
+          expected_codes = {
+              "/tmp/index.json": "106002",
+              "/tmp/index-android.json": "212002",
+          }
           ok = True
-          for name in ("/tmp/index.json", "/tmp/index-android.json"):
+          for name, expected_code in expected_codes.items():
               try:
                   data = json.loads(Path(name).read_text("utf-8"))
                   items = [x for x in data["extensionList"]["extensions"] if x.get("packageName") == os.environ["PACKAGE"]]
@@ -129,7 +137,7 @@ jobs:
                       continue
                   item = items[0]
                   sources = item.get("sources") or []
-                  if item.get("versionName") != "1.6.2" or str(item.get("versionCode")) != "106002" or len(sources) != 1 or sources[0].get("language") != "zh":
+                  if item.get("versionName") != "1.6.2" or str(item.get("versionCode")) != expected_code or len(sources) != 1 or sources[0].get("language") != "zh":
                       ok = False
               except Exception:
                   ok = False
