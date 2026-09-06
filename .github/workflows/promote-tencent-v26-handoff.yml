@@ -1,0 +1,113 @@
+name: Promote Tencent Comics v1.4.26 handoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-tencent-v26-handoff.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-tencent-v26-handoff
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout public repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout validated production handoff
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: c8c935a
+          path: handoff
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify and copy Tencent v26 production payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="handoff/production-handoff"
+          expected_source="ed7d4c5c29ba2892a3d98f80c34271dcbfb624c1"
+          [[ "$(tr -d '\r\n' < "$src/SOURCE_SHA.txt")" == "$expected_source" ]]
+          test -f "$src/tachiyomi-zh.tencentcomics-v1.4.26.apk"
+          test -f "$src/tachiyomi-zh.tencentcomics-v1.4.26.jar"
+          test -f "$src/icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104026.png"
+          for f in index.json index.min.json index.pb index-android.json index-android.min.json index-android.pb published-state.json; do
+            test -f "$src/$f"
+            cp "$src/$f" "$f"
+          done
+          cp "$src/tachiyomi-zh.tencentcomics-v1.4.26.apk" .
+          cp "$src/tachiyomi-zh.tencentcomics-v1.4.26.jar" .
+          mkdir -p icon
+          cp "$src/icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104026.png" icon/
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('index.json').read_text('utf-8'))
+          pkg = 'eu.kanade.tachiyomi.extension.zh.tencentcomics'
+          items = [x for x in data['extensionList']['extensions'] if x.get('packageName') == pkg]
+          assert len(items) == 1, items
+          item = items[0]
+          assert item.get('versionName') == '1.4.26', item
+          assert str(item.get('versionCode')) == '104026', item
+          # Guard against unrelated NoyAcg index regression while promoting Tencent only.
+          noy = next(x for x in data['extensionList']['extensions'] if x.get('packageName') == 'eu.kanade.tachiyomi.extension.zh.noyacgplus')
+          assert noy.get('versionName') == '1.6.3', noy
+          assert str(noy.get('versionCode')) == '106003', noy
+          print('Tencent Comics production index verified:', item['versionName'], item['versionCode'])
+          print('NoyAcg Plus index preserved:', noy['versionName'], noy['versionCode'])
+          PY
+          git diff --check
+
+      - name: Commit public repo update
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.json index.min.json index.pb index-android.json index-android.min.json index-android.pb published-state.json \
+            tachiyomi-zh.tencentcomics-v1.4.26.apk tachiyomi-zh.tencentcomics-v1.4.26.jar \
+            icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104026.png
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "Tencent v26 production payload already present"
+          else
+            git commit -m "Publish Tencent Comics v1.4.26"
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify public branch contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin repo
+          git show origin/repo:index.json > /tmp/index.json
+          git cat-file -e origin/repo:tachiyomi-zh.tencentcomics-v1.4.26.apk
+          git cat-file -e origin/repo:tachiyomi-zh.tencentcomics-v1.4.26.jar
+          git cat-file -e origin/repo:icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104026.png
+          python3 - <<'PY'
+          import json
+          data = json.load(open('/tmp/index.json', encoding='utf-8'))
+          pkg = 'eu.kanade.tachiyomi.extension.zh.tencentcomics'
+          item = next(x for x in data['extensionList']['extensions'] if x.get('packageName') == pkg)
+          assert item['versionName'] == '1.4.26'
+          assert str(item['versionCode']) == '104026'
+          noy = next(x for x in data['extensionList']['extensions'] if x.get('packageName') == 'eu.kanade.tachiyomi.extension.zh.noyacgplus')
+          assert noy['versionName'] == '1.6.3'
+          assert str(noy['versionCode']) == '106003'
+          print('Published Tencent Comics v1.4.26 / 104026 verified on repo branch')
+          print('NoyAcg Plus remains v1.6.3 / 106003')
+          PY
