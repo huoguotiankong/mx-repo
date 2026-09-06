@@ -1,4 +1,4 @@
-name: Publish Dongman Manhua Plus v1.6.5 handoff
+name: Publish Dongman Manhua Plus v1.6.6 handoff
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: publish-dongmanmanhuaplus-v5-handoff
+  group: publish-dongmanmanhuaplus-v6-handoff
   cancel-in-progress: false
 
 jobs:
@@ -38,10 +38,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected_sha='faa4535083ea96abc29d29d3ebf41bb374629c8d'
+          expected_sha='57b1739dfa079a858b4f4eebb6fc87e8d4d0fcc4'
           pkg='eu.kanade.tachiyomi.extension.zh.dongmanmanhuaplus'
-          apk='tachiyomi-zh.dongmanmanhuaplus-v1.6.5.apk'
-          jar='tachiyomi-zh.dongmanmanhuaplus-v1.6.5.jar'
+          apk='tachiyomi-zh.dongmanmanhuaplus-v1.6.6.apk'
+          jar='tachiyomi-zh.dongmanmanhuaplus-v1.6.6.jar'
+          icon="${pkg}-v106006.png"
           prod='handoff/production-handoff'
 
           test "$(tr -d '\r\n' < "$prod/SOURCE_SHA.txt")" = "$expected_sha"
@@ -51,21 +52,28 @@ jobs:
           test -f "$prod/index.pb"
           test -f "$prod/index-android.json"
           test -f "$prod/index-android.pb"
-          test -f "$prod/icon/${pkg}-v106005.png"
+          test -f "$prod/icon/$icon"
+
+          # The repository icon must be the current official Dongman icon, not the
+          # synthetic fallback generated when a module has no local launcher asset.
+          curl -LfsS \
+            'https://raw.githubusercontent.com/keiyoushi/extensions-source/main/src/zh/dongmanmanhua/res/mipmap-hdpi/ic_launcher.png' \
+            -o /tmp/official-dongman-icon.png
+          cmp "$prod/icon/$icon" /tmp/official-dongman-icon.png
 
           python3 - <<'PY'
           import json
           pkg='eu.kanade.tachiyomi.extension.zh.dongmanmanhuaplus'
           checks={
-              'handoff/production-handoff/index.json': 106005,
-              'handoff/production-handoff/index-android.json': 212005,
+              'handoff/production-handoff/index.json': 106006,
+              'handoff/production-handoff/index-android.json': 212006,
           }
           for path, code in checks.items():
               d=json.load(open(path, encoding='utf-8'))
               e=[x for x in d['extensionList']['extensions'] if x['packageName']==pkg]
               assert len(e)==1, (path, len(e))
               e=e[0]
-              assert e['versionName']=='1.6.5', (path, e)
+              assert e['versionName']=='1.6.6', (path, e)
               assert int(e['versionCode'])==code, (path, e)
               assert e['sources'][0]['language']=='zh', (path, e)
               assert int(e['sources'][0]['id'])==4940002032762570168, (path, e)
@@ -93,18 +101,21 @@ jobs:
             dist/tachiyomi-zh.dongmanmanhuaplus-v1.6.3.jar \
             dist/tachiyomi-zh.dongmanmanhuaplus-v1.6.4.apk \
             dist/tachiyomi-zh.dongmanmanhuaplus-v1.6.4.jar \
+            dist/tachiyomi-zh.dongmanmanhuaplus-v1.6.5.apk \
+            dist/tachiyomi-zh.dongmanmanhuaplus-v1.6.5.jar \
             "dist/icon/${pkg}-v106001.png" \
             "dist/icon/${pkg}-v106003.png" \
-            "dist/icon/${pkg}-v106004.png"
+            "dist/icon/${pkg}-v106004.png" \
+            "dist/icon/${pkg}-v106005.png"
 
           python3 - <<'PY'
           import json
           pkg='eu.kanade.tachiyomi.extension.zh.dongmanmanhuaplus'
-          checks={'dist/index.json':106005, 'dist/index-android.json':212005}
+          checks={'dist/index.json':106006, 'dist/index-android.json':212006}
           for path, code in checks.items():
               d=json.load(open(path, encoding='utf-8'))
               e=[x for x in d['extensionList']['extensions'] if x['packageName']==pkg][0]
-              assert e['versionName']=='1.6.5', (path,e)
+              assert e['versionName']=='1.6.6', (path,e)
               assert int(e['versionCode'])==code, (path,e)
               assert e['sources'][0]['language']=='zh', (path,e)
               assert int(e['sources'][0]['id'])==4940002032762570168, (path,e)
@@ -120,9 +131,9 @@ jobs:
           git add -A
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo 'Dongman Manhua Plus v1.6.5 is already published'
+            echo 'Dongman Manhua Plus v1.6.6 is already published'
           else
-            git commit -m 'Publish Dongman Manhua Plus v1.6.5'
+            git commit -m 'Publish Dongman Manhua Plus v1.6.6'
             git pull --rebase origin repo
             git push origin HEAD:repo
           fi
@@ -132,7 +143,8 @@ jobs:
         run: |
           set -euo pipefail
           base='https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo'
-          apk='tachiyomi-zh.dongmanmanhuaplus-v1.6.5.apk'
+          apk='tachiyomi-zh.dongmanmanhuaplus-v1.6.6.apk'
+          icon='icon/eu.kanade.tachiyomi.extension.zh.dongmanmanhuaplus-v106006.png'
           ok=0
           for attempt in 1 2 3 4 5 6 7 8; do
             curl -fsSL "$base/index.json?attempt=$attempt" -o /tmp/formal.json || true
@@ -142,20 +154,26 @@ jobs:
           try:
               d=json.load(open(os.environ['FORMAL'], encoding='utf-8'))
               e=[x for x in d['extensionList']['extensions'] if x['packageName']==pkg][0]
-              assert e['versionName']=='1.6.5'
-              assert int(e['versionCode'])==106005
+              assert e['versionName']=='1.6.6'
+              assert int(e['versionCode'])==106006
               assert e['sources'][0]['language']=='zh'
               assert int(e['sources'][0]['id'])==4940002032762570168
+              assert e['resources']['iconUrl'].endswith('v106006.png')
           except Exception as exc:
               print(exc)
               sys.exit(1)
           PY
             then
               curl -fsSI "$base/$apk?attempt=$attempt" >/dev/null
+              curl -fsSL "$base/$icon?attempt=$attempt" -o /tmp/public-icon.png
+              curl -LfsS \
+                'https://raw.githubusercontent.com/keiyoushi/extensions-source/main/src/zh/dongmanmanhua/res/mipmap-hdpi/ic_launcher.png' \
+                -o /tmp/official-dongman-icon.png
+              cmp /tmp/public-icon.png /tmp/official-dongman-icon.png
               ok=1
               break
             fi
             sleep $((attempt * 2))
           done
           test "$ok" = 1
-          echo 'Public formal store verified at Dongman Manhua Plus v1.6.5 / 106005 / zh'
+          echo 'Public formal store verified at Dongman Manhua Plus v1.6.6 / 106006 / zh with official icon'
