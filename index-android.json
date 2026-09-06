@@ -611,6 +611,27 @@
         ]
       },
       {
+        "name": "Qingman",
+        "packageName": "eu.kanade.tachiyomi.extension.zh.qingman",
+        "resources": {
+          "apkUrl": "https://cdn.jsdelivr.net/gh/huoguotiankong/mx-repo@repo/tachiyomi-zh.qingman-v1.6.2.apk",
+          "iconUrl": "https://cdn.jsdelivr.net/gh/huoguotiankong/mx-repo@repo/icon/eu.kanade.tachiyomi.extension.zh.qingman-v106002.png",
+          "jarUrl": "https://cdn.jsdelivr.net/gh/huoguotiankong/mx-repo@repo/tachiyomi-zh.qingman-v1.6.2.jar"
+        },
+        "extensionLib": "1.6",
+        "versionCode": "212002",
+        "versionName": "1.6.2",
+        "contentWarning": "CONTENT_WARNING_SAFE",
+        "sources": [
+          {
+            "id": "5091633172929638041",
+            "name": "\u9752\u6f2b",
+            "language": "zh",
+            "homeUrl": "https://sf85sdq66h.qingman.mom"
+          }
+        ]
+      },
+      {
         "name": "Webtoons",
         "packageName": "eu.kanade.tachiyomi.extension.zh.webtoons",
         "resources": {

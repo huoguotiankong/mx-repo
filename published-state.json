@@ -263,6 +263,17 @@
     "versionCode": 106001,
     "versionName": "1.6.1"
   },
+  "eu.kanade.tachiyomi.extension.zh.qingman": {
+    "androidVersionCode": 212002,
+    "apk": "tachiyomi-zh.qingman-v1.6.2.apk",
+    "apkSha256": "4d41551268a9acaeae21f67ac194e47197374e0749cdf55eaf3b3f8e14c96ca9",
+    "jar": "tachiyomi-zh.qingman-v1.6.2.jar",
+    "jarSha256": "06567cf42d2459b70d35ed2aed6af911840681c4094539f48e8ec5d0451d8ae4",
+    "module": "zh.qingman",
+    "sourceHash": "89eb67bd97e6954c8e4074c1036299671fd9421b469beec2cc4615552c196472",
+    "versionCode": 106002,
+    "versionName": "1.6.2"
+  },
   "eu.kanade.tachiyomi.extension.zh.webtoons": {
     "androidVersionCode": 212002,
     "apk": "tachiyomi-zh.webtoons-v1.6.2.apk",
