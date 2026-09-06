@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: huoguotiankong/mx-build
-          ref: c8c935a
+          ref: c8c935aa721d9405a43f2e007eed175486bf96e8
           path: handoff
           fetch-depth: 1
           persist-credentials: false
