@@ -56,16 +56,17 @@ jobs:
           python3 - <<'PY'
           import json
           pkg='eu.kanade.tachiyomi.extension.zh.dongmanmanhuaplus'
-          for path in [
-              'handoff/production-handoff/index.json',
-              'handoff/production-handoff/index-android.json',
-          ]:
+          checks={
+              'handoff/production-handoff/index.json': 106004,
+              'handoff/production-handoff/index-android.json': 212004,
+          }
+          for path, code in checks.items():
               d=json.load(open(path, encoding='utf-8'))
               e=[x for x in d['extensionList']['extensions'] if x['packageName']==pkg]
               assert len(e)==1, (path, len(e))
               e=e[0]
               assert e['versionName']=='1.6.4', (path, e)
-              assert int(e['versionCode'])==106004, (path, e)
+              assert int(e['versionCode'])==code, (path, e)
               assert e['sources'][0]['language']=='zh', (path, e)
               assert int(e['sources'][0]['id'])==4940002032762570168, (path, e)
               print('verified', path, e['versionName'], e['versionCode'], e['sources'][0]['language'])
@@ -96,11 +97,12 @@ jobs:
           python3 - <<'PY'
           import json
           pkg='eu.kanade.tachiyomi.extension.zh.dongmanmanhuaplus'
-          for path in ['dist/index.json','dist/index-android.json']:
+          checks={'dist/index.json':106004, 'dist/index-android.json':212004}
+          for path, code in checks.items():
               d=json.load(open(path, encoding='utf-8'))
               e=[x for x in d['extensionList']['extensions'] if x['packageName']==pkg][0]
               assert e['versionName']=='1.6.4', (path,e)
-              assert int(e['versionCode'])==106004, (path,e)
+              assert int(e['versionCode'])==code, (path,e)
               assert e['sources'][0]['language']=='zh', (path,e)
               assert int(e['sources'][0]['id'])==4940002032762570168, (path,e)
           PY
