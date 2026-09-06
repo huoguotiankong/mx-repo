@@ -1,0 +1,145 @@
+name: Publish Qingman v1.6.2 Production Handoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/publish-qingman-v2-handoff.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-qingman-v2-production-handoff
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout validated Qingman production handoff
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: extension-staging
+          path: handoff
+          persist-credentials: false
+
+      - name: Checkout distribution repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          path: dist
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify and stage Qingman v1.6.2 payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload='handoff/production-handoff'
+          expected_sha='dbf6045a28595440725aa538a8cfe52f27923eb3'
+          package='eu.kanade.tachiyomi.extension.zh.qingman'
+          apk='tachiyomi-zh.qingman-v1.6.2.apk'
+          jar='tachiyomi-zh.qingman-v1.6.2.jar'
+          icon="icon/${package}-v106002.png"
+
+          [[ "$(tr -d '\r\n' < "$payload/SOURCE_SHA.txt")" == "$expected_sha" ]] || {
+            echo '::error::Production handoff marker is not the validated Qingman v1.6.2 handoff'
+            exit 1
+          }
+          test -f "$payload/$apk"
+          test -f "$payload/$jar"
+          test -f "$payload/$icon"
+          test -f "$payload/index.json"
+          test -f "$payload/index.pb"
+          test -f "$payload/index-android.json"
+          test -f "$payload/index-android.pb"
+
+          PAYLOAD="$payload" PACKAGE="$package" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          for name in ("index.json", "index-android.json"):
+              data = json.loads((Path(os.environ["PAYLOAD"]) / name).read_text("utf-8"))
+              items = [x for x in data["extensionList"]["extensions"] if x.get("packageName") == os.environ["PACKAGE"]]
+              if len(items) != 1:
+                  raise SystemExit(f"{name}: expected exactly one Qingman entry, got {len(items)}")
+              item = items[0]
+              if item.get("versionName") != "1.6.2":
+                  raise SystemExit(f"{name}: wrong versionName {item.get('versionName')}")
+              if str(item.get("versionCode")) != "106002":
+                  raise SystemExit(f"{name}: wrong versionCode {item.get('versionCode')}")
+              sources = item.get("sources") or []
+              if len(sources) != 1 or sources[0].get("language") != "zh":
+                  raise SystemExit(f"{name}: Qingman language is not zh")
+          print("Validated Qingman v1.6.2 production indexes with language=zh")
+          PY
+
+          cp "$payload/index.json" dist/index.json
+          cp "$payload/index.min.json" dist/index.min.json
+          cp "$payload/index.pb" dist/index.pb
+          cp "$payload/index-android.json" dist/index-android.json
+          cp "$payload/index-android.min.json" dist/index-android.min.json
+          cp "$payload/index-android.pb" dist/index-android.pb
+          cp "$payload/published-state.json" dist/published-state.json
+          mkdir -p dist/icon
+          cp "$payload/$icon" "dist/$icon"
+          cp "$payload/$apk" dist/
+          cp "$payload/$jar" dist/
+
+      - name: Commit production repository
+        working-directory: dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Qingman v1.6.2 is already published'
+          else
+            git commit -m 'Publish Qingman v1.6.2'
+            git pull --rebase origin repo
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify public Qingman v1.6.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo'
+          package='eu.kanade.tachiyomi.extension.zh.qingman'
+          apk='tachiyomi-zh.qingman-v1.6.2.apk'
+          for attempt in 1 2 3 4 5 6; do
+            curl -fsSL "$base/index.json?attempt=$attempt" -o /tmp/index.json || true
+            curl -fsSL "$base/index-android.json?attempt=$attempt" -o /tmp/index-android.json || true
+            if PACKAGE="$package" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          ok = True
+          for name in ("/tmp/index.json", "/tmp/index-android.json"):
+              try:
+                  data = json.loads(Path(name).read_text("utf-8"))
+                  items = [x for x in data["extensionList"]["extensions"] if x.get("packageName") == os.environ["PACKAGE"]]
+                  if len(items) != 1:
+                      ok = False
+                      continue
+                  item = items[0]
+                  sources = item.get("sources") or []
+                  if item.get("versionName") != "1.6.2" or str(item.get("versionCode")) != "106002" or len(sources) != 1 or sources[0].get("language") != "zh":
+                      ok = False
+              except Exception:
+                  ok = False
+          raise SystemExit(0 if ok else 1)
+          PY
+            then
+              curl -fsSI "$base/$apk" >/dev/null
+              exit 0
+            fi
+            sleep $((attempt * 2))
+          done
+          echo '::error::Qingman v1.6.2 public endpoints did not converge'
+          exit 1
