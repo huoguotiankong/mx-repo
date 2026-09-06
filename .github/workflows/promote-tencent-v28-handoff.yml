@@ -1,0 +1,124 @@
+name: Promote Tencent Comics v1.4.28 handoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-tencent-v28-handoff.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-tencent-v28-handoff
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout public repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout validated production handoff
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: 1b53359e4fe0a21f6bfa01d5d0ae655da601df9d
+          path: handoff
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify and copy Tencent v28 production payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="handoff/production-handoff"
+          expected_source="9c0114de5f4f4b8dbeea103f74bf4dc1d37c083b"
+          [[ "$(tr -d '\r\n' < "$src/SOURCE_SHA.txt")" == "$expected_source" ]]
+          test -f "$src/tachiyomi-zh.tencentcomics-v1.4.28.apk"
+          test -f "$src/tachiyomi-zh.tencentcomics-v1.4.28.jar"
+          test -f "$src/icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104028.png"
+
+          cp index.json /tmp/index-before.json
+          cp published-state.json /tmp/published-state-before.json
+
+          for f in index.json index.min.json index.pb index-android.json index-android.min.json index-android.pb published-state.json; do
+            test -f "$src/$f"
+            cp "$src/$f" "$f"
+          done
+          cp "$src/tachiyomi-zh.tencentcomics-v1.4.28.apk" .
+          cp "$src/tachiyomi-zh.tencentcomics-v1.4.28.jar" .
+          mkdir -p icon
+          cp "$src/icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104028.png" icon/
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          pkg = 'eu.kanade.tachiyomi.extension.zh.tencentcomics'
+          before = json.loads(Path('/tmp/index-before.json').read_text('utf-8'))
+          after = json.loads(Path('index.json').read_text('utf-8'))
+          before_items = {x['packageName']: x for x in before['extensionList']['extensions']}
+          after_items = {x['packageName']: x for x in after['extensionList']['extensions']}
+
+          assert pkg in after_items, 'Tencent package missing from generated index'
+          item = after_items[pkg]
+          assert item.get('versionName') == '1.4.28', item
+          assert str(item.get('versionCode')) == '104028', item
+
+          before_other = set(before_items) - {pkg}
+          after_other = set(after_items) - {pkg}
+          assert before_other == after_other, (before_other - after_other, after_other - before_other)
+          for other in before_other:
+              old = before_items[other]
+              new = after_items[other]
+              assert old.get('versionName') == new.get('versionName'), (other, old.get('versionName'), new.get('versionName'))
+              assert str(old.get('versionCode')) == str(new.get('versionCode')), (other, old.get('versionCode'), new.get('versionCode'))
+
+          print('Tencent Comics production index verified:', item['versionName'], item['versionCode'])
+          print('All non-Tencent package versions preserved:', len(before_other))
+          PY
+          git diff --check
+
+      - name: Commit public repo update
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.json index.min.json index.pb index-android.json index-android.min.json index-android.pb published-state.json \
+            tachiyomi-zh.tencentcomics-v1.4.28.apk tachiyomi-zh.tencentcomics-v1.4.28.jar \
+            icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104028.png
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "Tencent v28 production payload already present"
+          else
+            git commit -m "Publish Tencent Comics v1.4.28"
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify public branch contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin repo
+          git show origin/repo:index.json > /tmp/index.json
+          git cat-file -e origin/repo:tachiyomi-zh.tencentcomics-v1.4.28.apk
+          git cat-file -e origin/repo:tachiyomi-zh.tencentcomics-v1.4.28.jar
+          git cat-file -e origin/repo:icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104028.png
+          python3 - <<'PY'
+          import json
+          data = json.load(open('/tmp/index.json', encoding='utf-8'))
+          pkg = 'eu.kanade.tachiyomi.extension.zh.tencentcomics'
+          item = next(x for x in data['extensionList']['extensions'] if x.get('packageName') == pkg)
+          assert item['versionName'] == '1.4.28'
+          assert str(item['versionCode']) == '104028'
+          print('Published Tencent Comics v1.4.28 / 104028 verified on repo branch')
+          PY
