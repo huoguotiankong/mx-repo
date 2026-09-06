@@ -1,5 +1,6 @@
 name: Publish NoyAcg Plus v3 Production Handoff
 # Publish validated production handoff for NoyAcg Plus v1.6.3.
+# Retriggered 2026-09-06 after client store visibility report.
 
 on:
   push:
