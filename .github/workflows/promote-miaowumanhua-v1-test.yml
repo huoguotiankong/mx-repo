@@ -1,0 +1,119 @@
+name: Promote Miaowu v1 test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/promote-miaowumanhua-v1-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-miaowumanhua-v1-test
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout public repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Fetch pinned staged Miaowu v1
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_sha='3d53530d6c8d9401f9bdc306ccba6c3b0ce96cb7'
+          base="https://raw.githubusercontent.com/huoguotiankong/mx-build/$staging_sha/test"
+          curl -fsSL --retry 3 "$base/index.json" -o /tmp/staged-index.json
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.miaowumanhua-v1.6.1.apk" -o /tmp/miaowumanhua.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.miaowumanhua-v106001.png" -o /tmp/miaowumanhua.png
+          test -s /tmp/miaowumanhua.apk
+          test -s /tmp/miaowumanhua.png
+          sha256sum /tmp/miaowumanhua.apk | tee /tmp/miaowumanhua.sha256
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package='eu.kanade.tachiyomi.extension.zh.miaowumanhua'
+          staged=json.loads(Path('/tmp/staged-index.json').read_text('utf-8'))
+          items=[x for x in staged['extensionList']['extensions'] if x.get('packageName')==package]
+          if len(items)!=1:
+              raise SystemExit(f'Expected one staged Miaowu item, got {len(items)}')
+          item=items[0]
+          if (item.get('versionName'), item.get('versionCode')) != ('1.6.1',106001):
+              raise SystemExit(f'Unexpected staged Miaowu version: {(item.get("versionName"),item.get("versionCode"))}')
+          sources=item.get('sources') or []
+          if len(sources)!=1 or sources[0].get('name')!='喵呜漫画':
+              raise SystemExit('Unexpected staged Miaowu source metadata')
+          Path('/tmp/miaowumanhua-entry.json').write_text(json.dumps(item,ensure_ascii=False),encoding='utf-8')
+          PY
+
+      - name: Promote only Miaowu v1
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package='eu.kanade.tachiyomi.extension.zh.miaowumanhua'
+          public_path=Path('test/index.json')
+          public=json.loads(public_path.read_text('utf-8'))
+          staged_item=json.loads(Path('/tmp/miaowumanhua-entry.json').read_text('utf-8'))
+          items=public['extensionList']['extensions']
+          positions=[i for i,x in enumerate(items) if x.get('packageName')==package]
+          if len(positions)>1:
+              raise SystemExit(f'Expected at most one public Miaowu item, got {len(positions)}')
+          if positions:
+              items[positions[0]]=staged_item
+          else:
+              items.append(staged_item)
+          items.sort(key=lambda x: (str(x.get('name','')).casefold(), str(x.get('packageName',''))))
+          public_path.write_text(json.dumps(public,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          PY
+          rm -f test/apk/tachiyomi-zh.miaowumanhua-v*.apk
+          rm -f test/icon/eu.kanade.tachiyomi.extension.zh.miaowumanhua-v*.png
+          cp /tmp/miaowumanhua.apk test/apk/tachiyomi-zh.miaowumanhua-v1.6.1.apk
+          cp /tmp/miaowumanhua.png test/icon/eu.kanade.tachiyomi.extension.zh.miaowumanhua-v106001.png
+          git status --short
+
+      - name: Commit and push Miaowu v1
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test/index.json test/apk test/icon
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No Miaowu test-store changes to publish'
+          else
+            git commit -m 'Publish Miaowu Manhua v1.6.1 test'
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify published files locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          package='eu.kanade.tachiyomi.extension.zh.miaowumanhua'
+          data=json.loads(Path('test/index.json').read_text('utf-8'))
+          items=[x for x in data['extensionList']['extensions'] if x.get('packageName')==package]
+          assert len(items)==1
+          assert (items[0].get('versionName'),items[0].get('versionCode'))==('1.6.1',106001)
+          apk=Path('test/apk/tachiyomi-zh.miaowumanhua-v1.6.1.apk')
+          icon=Path('test/icon/eu.kanade.tachiyomi.extension.zh.miaowumanhua-v106001.png')
+          assert apk.is_file() and icon.is_file()
+          staged_hash=Path('/tmp/miaowumanhua.sha256').read_text().split()[0]
+          assert hashlib.sha256(apk.read_bytes()).hexdigest()==staged_hash
+          print('Miaowu v1.6.1 local promotion verified:', staged_hash)
+          PY
