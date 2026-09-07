@@ -1,0 +1,158 @@
+name: Promote Qingman v1.6.6 Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-qingman-v6-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-qingman-v1-6-6-test
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Qingman audit record
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: main
+          path: control
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout verified staging store
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: extension-staging
+          path: staging
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify audited staged Qingman
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          package = 'eu.kanade.tachiyomi.extension.zh.qingman'
+          expected = ('1.6.6', 106006)
+          audit = json.loads(Path('control/.github/qingman-security-audit-result.json').read_text('utf-8'))
+          if audit.get('result') != 'passed':
+              raise SystemExit('Qingman security audit is not passed')
+          if audit.get('packageName') != package:
+              raise SystemExit('Qingman audit package mismatch')
+          if (audit.get('versionName'), audit.get('androidVersionCode')) != expected:
+              raise SystemExit('Qingman audit version mismatch')
+
+          staged = json.loads(Path('staging/test/index.json').read_text('utf-8'))
+          items = [x for x in staged['extensionList']['extensions'] if x.get('packageName') == package]
+          if len(items) != 1:
+              raise SystemExit(f'Expected one staged Qingman entry, got {len(items)}')
+          item = items[0]
+          if (item.get('versionName'), item.get('versionCode')) != expected:
+              raise SystemExit('Staged Qingman version mismatch')
+
+          apk = Path('staging/test/apk/tachiyomi-zh.qingman-v1.6.6.apk')
+          icon = Path('staging/test/icon/eu.kanade.tachiyomi.extension.zh.qingman-v106006.png')
+          if not apk.is_file() or not icon.is_file():
+              raise SystemExit('Staged Qingman APK/icon missing')
+          apk_sha = hashlib.sha256(apk.read_bytes()).hexdigest()
+          if apk_sha != audit.get('apkSha256'):
+              raise SystemExit(f'Audited APK SHA mismatch: {apk_sha}')
+          print(f'Qingman v1.6.6 audited staging verified sha256={apk_sha}')
+          PY
+
+      - name: Checkout distribution branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          path: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Replace only Qingman test entry and files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          package = 'eu.kanade.tachiyomi.extension.zh.qingman'
+          staged = json.loads(Path('staging/test/index.json').read_text('utf-8'))
+          public_path = Path('repo/test/index.json')
+          public = json.loads(public_path.read_text('utf-8'))
+
+          staged_items = [x for x in staged['extensionList']['extensions'] if x.get('packageName') == package]
+          public_items = public['extensionList']['extensions']
+          positions = [i for i, x in enumerate(public_items) if x.get('packageName') == package]
+          if len(staged_items) != 1 or len(positions) != 1:
+              raise SystemExit(f'Qingman entry cardinality mismatch staged={len(staged_items)} public={len(positions)}')
+          public_items[positions[0]] = staged_items[0]
+          public_path.write_text(json.dumps(public, ensure_ascii=False, indent=2) + '\n', 'utf-8')
+          PY
+
+          rm -f repo/test/apk/tachiyomi-zh.qingman-v*.apk
+          rm -f repo/test/icon/eu.kanade.tachiyomi.extension.zh.qingman-v*.png
+          cp staging/test/apk/tachiyomi-zh.qingman-v1.6.6.apk repo/test/apk/
+          cp staging/test/icon/eu.kanade.tachiyomi.extension.zh.qingman-v106006.png repo/test/icon/
+          git -C repo status --short
+
+      - name: Commit Qingman public test
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test/index.json test/apk test/icon
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Qingman v1.6.6 audited build is already public'
+          else
+            git commit -m 'Publish Qingman v1.6.6 test'
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify public Qingman test endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test'
+          expected_sha="$(python3 -c "import json; print(json.load(open('control/.github/qingman-security-audit-result.json'))['apkSha256'])")"
+          for attempt in 1 2 3 4 5 6; do
+            status="$(curl -L -sS -o /tmp/qingman-index.json -w '%{http_code}' "$base/index.json" || true)"
+            apk_status="$(curl -L -sS -o /tmp/qingman.apk -w '%{http_code}' "$base/apk/tachiyomi-zh.qingman-v1.6.6.apk" || true)"
+            if [[ "$status" == '200' && "$apk_status" == '200' ]]; then
+              if python3 - "$expected_sha" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          data = json.loads(Path('/tmp/qingman-index.json').read_text('utf-8'))
+          package = 'eu.kanade.tachiyomi.extension.zh.qingman'
+          items = [x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
+          if len(items) != 1 or (items[0].get('versionName'), items[0].get('versionCode')) != ('1.6.6', 106006):
+              raise SystemExit(1)
+          if hashlib.sha256(Path('/tmp/qingman.apk').read_bytes()).hexdigest() != sys.argv[1]:
+              raise SystemExit(1)
+          print('Public Qingman v1.6.6 index and audited APK SHA verified')
+          PY
+              then
+                exit 0
+              fi
+            fi
+            sleep $((attempt * 2))
+          done
+          echo '::error::Public test endpoint did not expose audited Qingman v1.6.6 in time'
+          exit 1
