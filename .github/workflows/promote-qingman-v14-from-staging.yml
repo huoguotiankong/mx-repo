@@ -1,0 +1,114 @@
+name: Promote Qingman v14 from staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/promote-qingman-v14-from-staging.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-qingman-v14-from-staging
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository release branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          path: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout staged test store
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: extension-staging
+          path: staging
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify and promote only Qingman v14
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          package = 'eu.kanade.tachiyomi.extension.zh.qingman'
+          expected = ('1.6.14', 106014)
+          staged_path = Path('staging/test/index.json')
+          public_path = Path('repo/test/index.json')
+          staged = json.loads(staged_path.read_text('utf-8'))
+          public = json.loads(public_path.read_text('utf-8'))
+
+          staged_items = [x for x in staged['extensionList']['extensions'] if x.get('packageName') == package]
+          if len(staged_items) != 1:
+              raise SystemExit(f'Expected exactly one staged Qingman entry, got {len(staged_items)}')
+          staged_item = staged_items[0]
+          actual = (staged_item.get('versionName'), staged_item.get('versionCode'))
+          if actual != expected:
+              raise SystemExit(f'Expected staged Qingman {expected}, got {actual}')
+
+          apk = Path('staging/test/apk/tachiyomi-zh.qingman-v1.6.14.apk')
+          icon = Path('staging/test/icon/eu.kanade.tachiyomi.extension.zh.qingman-v106014.png')
+          if not apk.is_file() or not icon.is_file():
+              raise SystemExit('Staged Qingman v14 APK/icon missing')
+          print('staged apk sha256=' + hashlib.sha256(apk.read_bytes()).hexdigest())
+
+          public_items = public['extensionList']['extensions']
+          positions = [i for i, x in enumerate(public_items) if x.get('packageName') == package]
+          if len(positions) != 1:
+              raise SystemExit(f'Expected exactly one public Qingman entry, got {len(positions)}')
+          public_items[positions[0]] = staged_item
+          public_path.write_text(json.dumps(public, ensure_ascii=False, indent=2) + '\n', 'utf-8')
+          PY
+
+          rm -f repo/test/apk/tachiyomi-zh.qingman-v*.apk
+          rm -f repo/test/icon/eu.kanade.tachiyomi.extension.zh.qingman-v*.png
+          cp staging/test/apk/tachiyomi-zh.qingman-v1.6.14.apk repo/test/apk/
+          cp staging/test/icon/eu.kanade.tachiyomi.extension.zh.qingman-v106014.png repo/test/icon/
+          git -C repo status --short
+
+      - name: Commit public Qingman v14 test
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test/index.json test/apk test/icon
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No Qingman v14 test-store changes'
+          else
+            git commit -m 'Publish Qingman v1.6.14 test'
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify promoted files locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package='eu.kanade.tachiyomi.extension.zh.qingman'
+          data=json.loads(Path('repo/test/index.json').read_text('utf-8'))
+          items=[x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
+          assert len(items)==1
+          assert (items[0].get('versionName'),items[0].get('versionCode')) == ('1.6.14',106014)
+          assert Path('repo/test/apk/tachiyomi-zh.qingman-v1.6.14.apk').is_file()
+          assert Path('repo/test/icon/eu.kanade.tachiyomi.extension.zh.qingman-v106014.png').is_file()
+          print('Qingman v1.6.14 local promotion verification passed')
+          PY
