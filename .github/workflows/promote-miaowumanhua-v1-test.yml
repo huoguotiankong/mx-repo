@@ -1,4 +1,4 @@
-name: Promote Miaowu v1 test
+name: Promote Miaowu v2 test
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: promote-miaowumanhua-v1-test
+  group: promote-miaowumanhua-test
   cancel-in-progress: false
 
 jobs:
@@ -26,15 +26,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Fetch pinned staged Miaowu v1
+      - name: Fetch pinned staged Miaowu v2
         shell: bash
         run: |
           set -euo pipefail
-          staging_sha='3d53530d6c8d9401f9bdc306ccba6c3b0ce96cb7'
+          staging_sha='e2f6b99da63e7b74d8f62798eb7a2ed78c9dca2e'
           base="https://raw.githubusercontent.com/huoguotiankong/mx-build/$staging_sha/test"
           curl -fsSL --retry 3 "$base/index.json" -o /tmp/staged-index.json
-          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.miaowumanhua-v1.6.1.apk" -o /tmp/miaowumanhua.apk
-          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.miaowumanhua-v106001.png" -o /tmp/miaowumanhua.png
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.miaowumanhua-v1.6.2.apk" -o /tmp/miaowumanhua.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.miaowumanhua-v106002.png" -o /tmp/miaowumanhua.png
           test -s /tmp/miaowumanhua.apk
           test -s /tmp/miaowumanhua.png
           sha256sum /tmp/miaowumanhua.apk | tee /tmp/miaowumanhua.sha256
@@ -47,15 +47,17 @@ jobs:
           if len(items)!=1:
               raise SystemExit(f'Expected one staged Miaowu item, got {len(items)}')
           item=items[0]
-          if (item.get('versionName'), item.get('versionCode')) != ('1.6.1',106001):
+          if (item.get('versionName'), item.get('versionCode')) != ('1.6.2',106002):
               raise SystemExit(f'Unexpected staged Miaowu version: {(item.get("versionName"),item.get("versionCode"))}')
           sources=item.get('sources') or []
           if len(sources)!=1 or sources[0].get('name')!='喵呜漫画':
               raise SystemExit('Unexpected staged Miaowu source metadata')
+          if sources[0].get('homeUrl')!='https://mh.iqtao.cn':
+              raise SystemExit(f'Unexpected Miaowu homeUrl: {sources[0].get("homeUrl")}')
           Path('/tmp/miaowumanhua-entry.json').write_text(json.dumps(item,ensure_ascii=False),encoding='utf-8')
           PY
 
-      - name: Promote only Miaowu v1
+      - name: Promote only Miaowu v2
         shell: bash
         run: |
           set -euo pipefail
@@ -79,11 +81,11 @@ jobs:
           PY
           rm -f test/apk/tachiyomi-zh.miaowumanhua-v*.apk
           rm -f test/icon/eu.kanade.tachiyomi.extension.zh.miaowumanhua-v*.png
-          cp /tmp/miaowumanhua.apk test/apk/tachiyomi-zh.miaowumanhua-v1.6.1.apk
-          cp /tmp/miaowumanhua.png test/icon/eu.kanade.tachiyomi.extension.zh.miaowumanhua-v106001.png
+          cp /tmp/miaowumanhua.apk test/apk/tachiyomi-zh.miaowumanhua-v1.6.2.apk
+          cp /tmp/miaowumanhua.png test/icon/eu.kanade.tachiyomi.extension.zh.miaowumanhua-v106002.png
           git status --short
 
-      - name: Commit and push Miaowu v1
+      - name: Commit and push Miaowu v2
         shell: bash
         run: |
           set -euo pipefail
@@ -94,7 +96,7 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No Miaowu test-store changes to publish'
           else
-            git commit -m 'Publish Miaowu Manhua v1.6.1 test'
+            git commit -m 'Publish Miaowu Manhua v1.6.2 test'
             git push origin HEAD:repo
           fi
 
@@ -109,11 +111,12 @@ jobs:
           data=json.loads(Path('test/index.json').read_text('utf-8'))
           items=[x for x in data['extensionList']['extensions'] if x.get('packageName')==package]
           assert len(items)==1
-          assert (items[0].get('versionName'),items[0].get('versionCode'))==('1.6.1',106001)
-          apk=Path('test/apk/tachiyomi-zh.miaowumanhua-v1.6.1.apk')
-          icon=Path('test/icon/eu.kanade.tachiyomi.extension.zh.miaowumanhua-v106001.png')
+          assert (items[0].get('versionName'),items[0].get('versionCode'))==('1.6.2',106002)
+          assert (items[0].get('sources') or [{}])[0].get('homeUrl')=='https://mh.iqtao.cn'
+          apk=Path('test/apk/tachiyomi-zh.miaowumanhua-v1.6.2.apk')
+          icon=Path('test/icon/eu.kanade.tachiyomi.extension.zh.miaowumanhua-v106002.png')
           assert apk.is_file() and icon.is_file()
           staged_hash=Path('/tmp/miaowumanhua.sha256').read_text().split()[0]
           assert hashlib.sha256(apk.read_bytes()).hexdigest()==staged_hash
-          print('Miaowu v1.6.1 local promotion verified:', staged_hash)
+          print('Miaowu v1.6.2 local promotion verified:', staged_hash)
           PY
