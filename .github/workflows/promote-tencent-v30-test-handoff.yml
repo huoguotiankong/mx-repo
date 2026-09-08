@@ -1,0 +1,127 @@
+name: Promote Tencent v30 test handoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-tencent-v30-test-handoff.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-tencent-v30-test-handoff
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout public repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout validated test-store handoff
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: c983052c43338ad5d974c359b3fe3a09483767c3
+          path: handoff
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify Tencent v30 handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('handoff/test/index.json')
+          data=json.loads(p.read_text('utf-8'))
+          exts=data['extensionList']['extensions']
+          pkg='eu.kanade.tachiyomi.extension.zh.tencentcomics'
+          items=[x for x in exts if x.get('packageName')==pkg]
+          assert len(items)==1, items
+          item=items[0]
+          assert (item.get('versionName'), item.get('versionCode'))==('1.4.30',104030), item
+          assert len(exts) >= 19, len(exts)
+          print('Tencent v30 staged:', item['versionName'], item['versionCode'])
+          print('Test extensions preserved:', len(exts))
+          PY
+          test -f handoff/test/apk/tachiyomi-zh.tencentcomics-v1.4.30.apk
+          test -f handoff/test/icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104030.png
+
+      - name: Replace test-store snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf test
+          mkdir -p test
+          cp -a handoff/test/. test/
+          git status --short
+          git diff --check
+
+      - name: Commit Tencent v30 test store
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add test
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'Tencent v30 test payload already present'
+          else
+            git commit -m 'Publish Tencent Comics v1.4.30 test'
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify repo branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin repo
+          git show origin/repo:test/index.json > /tmp/index.json
+          git cat-file -e origin/repo:test/apk/tachiyomi-zh.tencentcomics-v1.4.30.apk
+          git cat-file -e origin/repo:test/icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104030.png
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/index.json',encoding='utf-8'))
+          exts=data['extensionList']['extensions']
+          pkg='eu.kanade.tachiyomi.extension.zh.tencentcomics'
+          item=next(x for x in exts if x.get('packageName')==pkg)
+          assert (item.get('versionName'),item.get('versionCode'))==('1.4.30',104030), item
+          assert len(exts) >= 19, len(exts)
+          print('Published Tencent test:', item['versionName'], item['versionCode'])
+          print('Public test extensions:', len(exts))
+          PY
+
+      - name: Verify public raw index
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for n in 1 2 3 4 5 6; do
+            curl -L -fsS "https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test/index.json?ts=$(date +%s%N)" -o /tmp/raw-index.json || true
+            if python3 - <<'PY'
+          import json
+          from pathlib import Path
+          try:
+              data=json.loads(Path('/tmp/raw-index.json').read_text('utf-8'))
+              pkg='eu.kanade.tachiyomi.extension.zh.tencentcomics'
+              item=next(x for x in data['extensionList']['extensions'] if x.get('packageName')==pkg)
+              assert (item.get('versionName'),item.get('versionCode'))==('1.4.30',104030)
+          except Exception:
+              raise SystemExit(1)
+          PY
+            then ok=1; break; fi
+            sleep $((n*2))
+          done
+          [[ "$ok" -eq 1 ]]
+          echo 'Tencent v30 public raw test index verified'
