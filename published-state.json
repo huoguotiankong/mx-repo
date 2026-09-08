@@ -175,6 +175,17 @@
     "versionCode": 106001,
     "versionName": "1.6.1"
   },
+  "eu.kanade.tachiyomi.extension.zh.manwaplus": {
+    "androidVersionCode": 212004,
+    "apk": "tachiyomi-zh.manwaplus-v1.6.4.apk",
+    "apkSha256": "961c3a311de68585322a0eb0263a87cf5f2ec8ff5a0f9bcba451a046cdf51fbb",
+    "jar": "tachiyomi-zh.manwaplus-v1.6.4.jar",
+    "jarSha256": "941dcf49b672b68be123e740eed74609d92b624d9ba858383c1ce2abd52ac96f",
+    "module": "zh.manwaplus",
+    "sourceHash": "8df7b568c6f627077e4efe1847e3e89f973b7cc7c28aef32c8a90167b8e5b580",
+    "versionCode": 106004,
+    "versionName": "1.6.4"
+  },
   "eu.kanade.tachiyomi.extension.zh.mengxige": {
     "androidVersionCode": 212004,
     "apk": "tachiyomi-zh.mengxige-v1.6.4.apk",
