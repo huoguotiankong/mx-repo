@@ -176,15 +176,15 @@
     "versionName": "1.6.1"
   },
   "eu.kanade.tachiyomi.extension.zh.manwaplus": {
-    "androidVersionCode": 212004,
-    "apk": "tachiyomi-zh.manwaplus-v1.6.4.apk",
-    "apkSha256": "961c3a311de68585322a0eb0263a87cf5f2ec8ff5a0f9bcba451a046cdf51fbb",
-    "jar": "tachiyomi-zh.manwaplus-v1.6.4.jar",
-    "jarSha256": "941dcf49b672b68be123e740eed74609d92b624d9ba858383c1ce2abd52ac96f",
+    "androidVersionCode": 212005,
+    "apk": "tachiyomi-zh.manwaplus-v1.6.5.apk",
+    "apkSha256": "23c889b58be6c145a16c5cca739517b5cfd1f1a7d457d332941d6a4bb82db797",
+    "jar": "tachiyomi-zh.manwaplus-v1.6.5.jar",
+    "jarSha256": "c3e9cdd7a9a7a88731a5c356aca0d7d08f6c58a4d444f6b331f2dbf4aed1c071",
     "module": "zh.manwaplus",
-    "sourceHash": "8df7b568c6f627077e4efe1847e3e89f973b7cc7c28aef32c8a90167b8e5b580",
-    "versionCode": 106004,
-    "versionName": "1.6.4"
+    "sourceHash": "6ac98c78748d58513c0c5401c6b4e9ff449221e7539357ed50b0ca75f42cf137",
+    "versionCode": 106005,
+    "versionName": "1.6.5"
   },
   "eu.kanade.tachiyomi.extension.zh.mengxige": {
     "androidVersionCode": 212004,
