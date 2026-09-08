@@ -1,0 +1,165 @@
+name: Promote MengXiGe v1.6.6 production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/promote-mengxige-v166-production.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-mengxige-production
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout formal repository
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          path: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout validated MengXiGe staging
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: formal-staging
+          path: staging
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify staged MengXiGe v1.6.6 and concurrent-release guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          h='staging/formal'
+          test -f "$h/VALIDATED.txt"
+          grep -Fx 'module=mengxige' "$h/VALIDATED.txt"
+          grep -Fx 'version=1.6.6' "$h/VALIDATED.txt"
+          grep -Fx 'canonicalVersionCode=106006' "$h/VALIDATED.txt"
+          grep -Fx 'androidVersionCode=212006' "$h/VALIDATED.txt"
+          test -f "$h/tachiyomi-zh.mengxige-v1.6.6.apk"
+          test -f "$h/tachiyomi-zh.mengxige-v1.6.6.jar"
+          test -f "$h/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v106006.png"
+          for file in index.json index.min.json index.pb index-android.json index-android.min.json index-android.pb published-state.json repo.json; do
+            test -f "$h/$file"
+          done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package='eu.kanade.tachiyomi.extension.zh.mengxige'
+          h=Path('staging/formal')
+          def load(path): return json.loads(path.read_text('utf-8'))
+          handoff=load(h/'index.json')
+          current=load(Path('repo/index.json'))
+          hext={x['packageName']:x for x in handoff['extensionList']['extensions']}
+          cext={x['packageName']:x for x in current['extensionList']['extensions']}
+          assert package in hext
+          m=hext[package]
+          assert m['versionName']=='1.6.6' and int(m['versionCode'])==106006, m
+          assert m['resources']['apkUrl'].endswith('/tachiyomi-zh.mengxige-v1.6.6.apk'), m
+          assert m['resources']['jarUrl'].endswith('/tachiyomi-zh.mengxige-v1.6.6.jar'), m
+          assert m['resources']['iconUrl'].endswith('/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v106006.png'), m
+          hs=dict(hext); hs.pop(package, None)
+          cs=dict(cext); cs.pop(package, None)
+          if hs != cs:
+              raise SystemExit('Formal repository changed after staging generation; refusing to overwrite another release')
+          android=load(h/'index-android.json')
+          am=[x for x in android['extensionList']['extensions'] if x.get('packageName')==package]
+          assert len(am)==1 and int(am[0]['versionCode'])==212006, am
+          hstate=load(h/'published-state.json')
+          cstate=load(Path('repo/published-state.json'))
+          assert hstate[package]['versionName']=='1.6.6', hstate[package]
+          assert int(hstate[package]['versionCode'])==106006, hstate[package]
+          assert int(hstate[package]['androidVersionCode'])==212006, hstate[package]
+          hs_state=dict(hstate); hs_state.pop(package, None)
+          cs_state=dict(cstate); cs_state.pop(package, None)
+          if hs_state != cs_state:
+              raise SystemExit('Published state changed after staging generation; refusing to overwrite another release')
+          print('MengXiGe v1.6.6 staging and concurrent-release guard verified')
+          PY
+
+      - name: Apply formal MengXiGe v1.6.6 handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          h='staging/formal'
+          rm -f repo/tachiyomi-zh.mengxige-v*.apk repo/tachiyomi-zh.mengxige-v*.jar
+          rm -f repo/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v*.png
+          cp "$h/tachiyomi-zh.mengxige-v1.6.6.apk" repo/
+          cp "$h/tachiyomi-zh.mengxige-v1.6.6.jar" repo/
+          cp "$h/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v106006.png" repo/icon/
+          for file in index.json index.min.json index.pb index-android.json index-android.min.json index-android.pb published-state.json repo.json; do
+            cp "$h/$file" "repo/$file"
+          done
+
+      - name: Verify formal repository before push
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package='eu.kanade.tachiyomi.extension.zh.mengxige'
+          normal=json.loads(Path('repo/index.json').read_text('utf-8'))
+          m=[x for x in normal['extensionList']['extensions'] if x.get('packageName')==package]
+          assert len(m)==1 and m[0]['versionName']=='1.6.6' and int(m[0]['versionCode'])==106006, m
+          android=json.loads(Path('repo/index-android.json').read_text('utf-8'))
+          a=[x for x in android['extensionList']['extensions'] if x.get('packageName')==package]
+          assert len(a)==1 and int(a[0]['versionCode'])==212006, a
+          state=json.loads(Path('repo/published-state.json').read_text('utf-8'))
+          assert state[package]['versionName']=='1.6.6', state[package]
+          assert Path('repo/index.pb').is_file()
+          assert Path('repo/tachiyomi-zh.mengxige-v1.6.6.apk').is_file()
+          assert Path('repo/tachiyomi-zh.mengxige-v1.6.6.jar').is_file()
+          assert Path('repo/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v106006.png').is_file()
+          print('Formal MengXiGe v1.6.6 snapshot verified before push')
+          PY
+          git -C repo add -A
+          git -C repo diff --cached --check
+
+      - name: Commit and push formal plugin store
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git diff --cached --quiet; then
+            echo 'MengXiGe v1.6.6 is already published'
+          else
+            git commit -m 'Publish MengXiGe v1.6.6'
+            git pull --rebase origin repo
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify pushed formal plugin store
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C repo fetch origin repo
+          git -C repo reset --hard origin/repo
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package='eu.kanade.tachiyomi.extension.zh.mengxige'
+          normal=json.loads(Path('repo/index.json').read_text('utf-8'))
+          m=[x for x in normal['extensionList']['extensions'] if x.get('packageName')==package]
+          assert len(m)==1 and m[0]['versionName']=='1.6.6' and int(m[0]['versionCode'])==106006, m
+          android=json.loads(Path('repo/index-android.json').read_text('utf-8'))
+          a=[x for x in android['extensionList']['extensions'] if x.get('packageName')==package]
+          assert len(a)==1 and int(a[0]['versionCode'])==212006, a
+          assert Path('repo/index.pb').is_file()
+          assert Path('repo/tachiyomi-zh.mengxige-v1.6.6.apk').is_file()
+          assert Path('repo/tachiyomi-zh.mengxige-v1.6.6.jar').is_file()
+          assert Path('repo/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v106006.png').is_file()
+          print('Formal MengXiGe v1.6.6 plugin-store push verified')
+          PY
