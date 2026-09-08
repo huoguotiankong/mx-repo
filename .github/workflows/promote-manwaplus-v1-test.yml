@@ -1,4 +1,4 @@
-name: Promote Manwa Plus v1 test
+name: Promote Manwa Plus v1.6.3 test
 
 on:
   push:
@@ -26,15 +26,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Fetch pinned staged Manwa Plus v1
+      - name: Fetch pinned staged Manwa Plus v1.6.3
         shell: bash
         run: |
           set -euo pipefail
-          staging_sha='af6f601e8b989eb42ea32a1d1552369e2df6b684'
+          staging_sha='368285cfcbebdb68d1cbad2fbb040e0c9919c629'
           base="https://raw.githubusercontent.com/huoguotiankong/mx-build/$staging_sha/test"
           curl -fsSL --retry 3 "$base/index.json" -o /tmp/staged-index.json
-          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.manwaplus-v1.6.1.apk" -o /tmp/manwaplus.apk
-          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.manwaplus-v106001.png" -o /tmp/manwaplus.png
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.manwaplus-v1.6.3.apk" -o /tmp/manwaplus.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.manwaplus-v106003.png" -o /tmp/manwaplus.png
           test -s /tmp/manwaplus.apk
           test -s /tmp/manwaplus.png
           sha256sum /tmp/manwaplus.apk | tee /tmp/manwaplus.sha256
@@ -48,7 +48,7 @@ jobs:
           if len(items) != 1:
               raise SystemExit(f'Expected one staged Manwa Plus item, got {len(items)}')
           item = items[0]
-          if (item.get('versionName'), item.get('versionCode')) != ('1.6.1', 106001):
+          if (item.get('versionName'), item.get('versionCode')) != ('1.6.3', 106003):
               raise SystemExit(f'Unexpected staged Manwa Plus version: {(item.get("versionName"), item.get("versionCode"))}')
           if item.get('extensionLib') != '1.6':
               raise SystemExit(f'Unexpected extensionLib: {item.get("extensionLib")}')
@@ -63,7 +63,7 @@ jobs:
           )
           PY
 
-      - name: Promote only Manwa Plus v1 to test store
+      - name: Promote only Manwa Plus v1.6.3 to test store
         shell: bash
         run: |
           set -euo pipefail
@@ -88,11 +88,11 @@ jobs:
           PY
           rm -f test/apk/tachiyomi-zh.manwaplus-v*.apk
           rm -f test/icon/eu.kanade.tachiyomi.extension.zh.manwaplus-v*.png
-          cp /tmp/manwaplus.apk test/apk/tachiyomi-zh.manwaplus-v1.6.1.apk
-          cp /tmp/manwaplus.png test/icon/eu.kanade.tachiyomi.extension.zh.manwaplus-v106001.png
+          cp /tmp/manwaplus.apk test/apk/tachiyomi-zh.manwaplus-v1.6.3.apk
+          cp /tmp/manwaplus.png test/icon/eu.kanade.tachiyomi.extension.zh.manwaplus-v106003.png
           git status --short
 
-      - name: Commit and push Manwa Plus v1 test
+      - name: Commit and push Manwa Plus v1.6.3 test
         shell: bash
         run: |
           set -euo pipefail
@@ -103,7 +103,7 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No Manwa Plus test-store changes to publish'
           else
-            git commit -m 'Publish Manwa Plus v1.6.1 test'
+            git commit -m 'Publish Manwa Plus v1.6.3 test'
             git push origin HEAD:repo
           fi
 
@@ -121,15 +121,15 @@ jobs:
           items = [x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
           assert len(items) == 1
           item = items[0]
-          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.1', 106001)
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.3', 106003)
           assert item.get('extensionLib') == '1.6'
           source = (item.get('sources') or [{}])[0]
           assert source.get('name') == '漫蛙 Plus'
           assert source.get('homeUrl') == 'https://manwa.me'
-          apk = Path('test/apk/tachiyomi-zh.manwaplus-v1.6.1.apk')
-          icon = Path('test/icon/eu.kanade.tachiyomi.extension.zh.manwaplus-v106001.png')
+          apk = Path('test/apk/tachiyomi-zh.manwaplus-v1.6.3.apk')
+          icon = Path('test/icon/eu.kanade.tachiyomi.extension.zh.manwaplus-v106003.png')
           assert apk.is_file() and icon.is_file()
           staged_hash = Path('/tmp/manwaplus.sha256').read_text().split()[0]
           assert hashlib.sha256(apk.read_bytes()).hexdigest() == staged_hash
-          print('Manwa Plus v1.6.1 local test promotion verified:', staged_hash)
+          print('Manwa Plus v1.6.3 local test promotion verified:', staged_hash)
           PY
