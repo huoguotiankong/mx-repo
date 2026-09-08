@@ -198,15 +198,15 @@
     "versionName": "1.6.5"
   },
   "eu.kanade.tachiyomi.extension.zh.mengxige": {
-    "androidVersionCode": 212004,
-    "apk": "tachiyomi-zh.mengxige-v1.6.4.apk",
-    "apkSha256": "f384ca64d9cc8ddc5934aa185cd1ca8b3568695d15be0bcb4f30263b3d7b2db8",
-    "jar": "tachiyomi-zh.mengxige-v1.6.4.jar",
-    "jarSha256": "64e89b8717f4e0a9d37ec27501c17dc8c76f6b9873898a41161388e8e0f6dcfc",
+    "androidVersionCode": 212006,
+    "apk": "tachiyomi-zh.mengxige-v1.6.6.apk",
+    "apkSha256": "68200c58485f55843574c470cdffeca43878ab9a69d7c1d5e53a4a099e4444db",
+    "jar": "tachiyomi-zh.mengxige-v1.6.6.jar",
+    "jarSha256": "a83878f66a73116efd5fef5916477942e69caab5a276152c9a04bfdd08c8693a",
     "module": "zh.mengxige",
-    "sourceHash": "e5c91e9296ded0daa9d9ec6e82633917d8ffc2c345efa6ae5da0efc79783cc84",
-    "versionCode": 106004,
-    "versionName": "1.6.4"
+    "sourceHash": "6114b69d097a8664e402eb930a250d84c773e956d206c82f8bcb481b5c7c61db",
+    "versionCode": 106006,
+    "versionName": "1.6.6"
   },
   "eu.kanade.tachiyomi.extension.zh.mihoutao": {
     "androidVersionCode": 212002,
