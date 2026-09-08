@@ -1,0 +1,128 @@
+name: Promote MengXiGe v5 from staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/promote-mengxige-v5-from-staging.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-mengxige-v5-from-staging
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository release branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          path: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout staged test store
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: extension-staging
+          path: staging
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify and promote only MengXiGe v5
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          package='eu.kanade.tachiyomi.extension.zh.mengxige'
+          expected=('1.6.5',106005)
+          staged=json.loads(Path('staging/test/index.json').read_text('utf-8'))
+          public_path=Path('repo/test/index.json')
+          public=json.loads(public_path.read_text('utf-8'))
+          staged_items=[x for x in staged['extensionList']['extensions'] if x.get('packageName')==package]
+          if len(staged_items)!=1: raise SystemExit(f'Expected one staged MengXiGe entry, got {len(staged_items)}')
+          item=staged_items[0]
+          actual=(item.get('versionName'),item.get('versionCode'))
+          if actual!=expected: raise SystemExit(f'Expected staged MengXiGe {expected}, got {actual}')
+          apk=Path('staging/test/apk/tachiyomi-zh.mengxige-v1.6.5.apk')
+          icon=Path('staging/test/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v106005.png')
+          if not apk.is_file() or not icon.is_file(): raise SystemExit('Staged MengXiGe v5 APK/icon missing')
+          print('staged apk sha256='+hashlib.sha256(apk.read_bytes()).hexdigest())
+          items=public['extensionList']['extensions']
+          positions=[i for i,x in enumerate(items) if x.get('packageName')==package]
+          if len(positions)==0:
+              items.append(item)
+          elif len(positions)==1:
+              items[positions[0]]=item
+          else:
+              raise SystemExit(f'Expected at most one public MengXiGe entry, got {len(positions)}')
+          public_path.write_text(json.dumps(public,ensure_ascii=False,indent=2)+'\n','utf-8')
+          PY
+          rm -f repo/test/apk/tachiyomi-zh.mengxige-v*.apk
+          rm -f repo/test/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v*.png
+          cp staging/test/apk/tachiyomi-zh.mengxige-v1.6.5.apk repo/test/apk/
+          cp staging/test/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v106005.png repo/test/icon/
+
+      - name: Commit public MengXiGe v5 test
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test/index.json test/apk test/icon
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No MengXiGe v5 test-store changes'
+          else
+            git commit -m 'Publish MengXiGe v1.6.5 stability test'
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify promoted files locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package='eu.kanade.tachiyomi.extension.zh.mengxige'
+          data=json.loads(Path('repo/test/index.json').read_text('utf-8'))
+          items=[x for x in data['extensionList']['extensions'] if x.get('packageName')==package]
+          assert len(items)==1
+          assert (items[0].get('versionName'),items[0].get('versionCode'))==('1.6.5',106005)
+          assert Path('repo/test/apk/tachiyomi-zh.mengxige-v1.6.5.apk').is_file()
+          assert Path('repo/test/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v106005.png').is_file()
+          print('MengXiGe v1.6.5 local promotion verification passed')
+          PY
+
+      - name: Verify public raw test index
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,time,urllib.request
+          url='https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test/index.json'
+          package='eu.kanade.tachiyomi.extension.zh.mengxige'
+          for attempt in range(1,11):
+              try:
+                  with urllib.request.urlopen(url+'?v=106005-'+str(attempt),timeout=15) as r:
+                      data=json.load(r)
+                  items=[x for x in data['extensionList']['extensions'] if x.get('packageName')==package]
+                  if len(items)==1 and (items[0].get('versionName'),items[0].get('versionCode'))==('1.6.5',106005):
+                      print('Public raw MengXiGe v5 verified')
+                      raise SystemExit(0)
+              except Exception as e:
+                  print('attempt',attempt,'not ready:',e)
+              time.sleep(min(attempt,5))
+          raise SystemExit('Public raw MengXiGe v5 not visible')
+          PY
