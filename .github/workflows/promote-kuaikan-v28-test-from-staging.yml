@@ -68,25 +68,22 @@ jobs:
               if old.name != src_icon.name:
                   old.unlink()
 
-          for name in ("index.json", "repo.json"):
-              source_data = json.loads((src / name).read_text("utf-8"))
-              target_data = json.loads((dst / name).read_text("utf-8"))
-              source_items = source_data["extensionList"]["extensions"]
-              target_items = target_data["extensionList"]["extensions"]
-              replacement = next((x for x in source_items if x.get("packageName") == package), None)
-              if replacement is None:
-                  raise SystemExit(f"{name}: staged Kuaikan entry missing")
-              if (replacement.get("versionName"), replacement.get("versionCode")) != (version_name, version_code):
-                  raise SystemExit(f"{name}: unexpected staged Kuaikan version")
-              replaced = False
-              for i, item in enumerate(target_items):
-                  if item.get("packageName") == package:
-                      target_items[i] = replacement
-                      replaced = True
-                      break
-              if not replaced:
-                  target_items.append(replacement)
-              (dst / name).write_text(json.dumps(target_data, ensure_ascii=False, indent=2) + "\n", "utf-8")
+          source_data = json.loads((src / "index.json").read_text("utf-8"))
+          target_data = json.loads((dst / "index.json").read_text("utf-8"))
+          source_items = source_data["extensionList"]["extensions"]
+          target_items = target_data["extensionList"]["extensions"]
+          replacement = next((x for x in source_items if x.get("packageName") == package), None)
+          if replacement is None:
+              raise SystemExit("index.json: staged Kuaikan entry missing")
+          if (replacement.get("versionName"), replacement.get("versionCode")) != (version_name, version_code):
+              raise SystemExit("index.json: unexpected staged Kuaikan version")
+          for i, item in enumerate(target_items):
+              if item.get("packageName") == package:
+                  target_items[i] = replacement
+                  break
+          else:
+              target_items.append(replacement)
+          (dst / "index.json").write_text(json.dumps(target_data, ensure_ascii=False, indent=2) + "\n", "utf-8")
 
           print("Prepared Kuaikan v28 public test promotion only")
           PY
@@ -99,12 +96,13 @@ jobs:
           import json
           from pathlib import Path
           package = "eu.kanade.tachiyomi.extension.zh.kuaikanmanhua"
-          for name in ("index.json", "repo.json"):
-              data = json.loads(Path("public-repo/test", name).read_text("utf-8"))
-              item = next(x for x in data["extensionList"]["extensions"] if x.get("packageName") == package)
-              assert item["versionName"] == "1.6.28", item
-              assert item["versionCode"] == 106028, item
-              assert item["resources"]["apkUrl"].endswith("tachiyomi-zh.kuaikanmanhua-v1.6.28.apk"), item
+          data = json.loads(Path("public-repo/test/index.json").read_text("utf-8"))
+          item = next(x for x in data["extensionList"]["extensions"] if x.get("packageName") == package)
+          assert item["versionName"] == "1.6.28", item
+          assert item["versionCode"] == 106028, item
+          assert item["resources"]["apkUrl"].endswith("tachiyomi-zh.kuaikanmanhua-v1.6.28.apk"), item
+          repo_meta = json.loads(Path("public-repo/test/repo.json").read_text("utf-8"))
+          assert repo_meta["index_v2"].endswith("/test/index.json"), repo_meta
           assert Path("public-repo/test/apk/tachiyomi-zh.kuaikanmanhua-v1.6.28.apk").is_file()
           assert Path("public-repo/test/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106028.png").is_file()
           print("Kuaikan v28 local test store verification passed")
