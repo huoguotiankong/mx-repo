@@ -21,6 +21,17 @@
     "versionCode": 106021,
     "versionName": "1.6.21"
   },
+  "eu.kanade.tachiyomi.extension.zh.cyppt": {
+    "androidVersionCode": 212001,
+    "apk": "tachiyomi-zh.cyppt-v1.6.1.apk",
+    "apkSha256": "50d1b7fd6e1aa68104487aa04187a609ee7965e54b12712eaef0c31021aef7b2",
+    "jar": "tachiyomi-zh.cyppt-v1.6.1.jar",
+    "jarSha256": "525141e7f19fa1ec3e5e59cc5b59e5155858105b8b7c6ecb73df4b2d3e490bd5",
+    "module": "zh.cyppt",
+    "sourceHash": "890ac0cff90fcc098433a2a496b6de6bec6e56a97f9ff661137abf0b880e3f80",
+    "versionCode": 106001,
+    "versionName": "1.6.1"
+  },
   "eu.kanade.tachiyomi.extension.zh.darenmanhua": {
     "androidVersionCode": 212001,
     "apk": "tachiyomi-zh.darenmanhua-v1.6.1.apk",
