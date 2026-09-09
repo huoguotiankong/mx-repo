@@ -1,0 +1,135 @@
+name: Promote Cyppt v1.6.3 test from staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/promote-cyppt-v163-test-from-staging.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-cyppt-test
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout public repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Fetch pinned staged Cyppt v1.6.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_sha='4856013ef27a7d4cc200a8a4441d5e5c90c04fc5'
+          base="https://raw.githubusercontent.com/huoguotiankong/mx-build/$staging_sha/test"
+          curl -fsSL --retry 3 "$base/index.json" -o /tmp/staged-index.json
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.cyppt-v1.6.3.apk" -o /tmp/cyppt.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.cyppt-v106003.png" -o /tmp/cyppt.png
+          test -s /tmp/cyppt.apk
+          test -s /tmp/cyppt.png
+          sha256sum /tmp/cyppt.apk | tee /tmp/cyppt.sha256
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          package = 'eu.kanade.tachiyomi.extension.zh.cyppt'
+          staged = json.loads(Path('/tmp/staged-index.json').read_text('utf-8'))
+          items = [x for x in staged['extensionList']['extensions'] if x.get('packageName') == package]
+          if len(items) != 1:
+              raise SystemExit(f'Expected one staged Cyppt item, got {len(items)}')
+          item = items[0]
+          if (item.get('versionName'), item.get('versionCode')) != ('1.6.3', 106003):
+              raise SystemExit(f'Unexpected staged Cyppt version: {(item.get("versionName"), item.get("versionCode"))}')
+          if item.get('extensionLib') != '1.6':
+              raise SystemExit(f'Unexpected extensionLib: {item.get("extensionLib")}')
+          sources = item.get('sources') or []
+          if len(sources) != 1 or sources[0].get('name') != '超越漫画网':
+              raise SystemExit('Unexpected staged Cyppt source metadata')
+          if sources[0].get('homeUrl') != 'https://www.cyppt.com':
+              raise SystemExit(f'Unexpected Cyppt homeUrl: {sources[0].get("homeUrl")}')
+          Path('/tmp/cyppt-entry.json').write_text(
+              json.dumps(item, ensure_ascii=False),
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Promote only Cyppt v1.6.3 to test store
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          package = 'eu.kanade.tachiyomi.extension.zh.cyppt'
+          public_path = Path('test/index.json')
+          public = json.loads(public_path.read_text('utf-8'))
+          staged_item = json.loads(Path('/tmp/cyppt-entry.json').read_text('utf-8'))
+          items = public['extensionList']['extensions']
+          positions = [i for i, x in enumerate(items) if x.get('packageName') == package]
+          if len(positions) > 1:
+              raise SystemExit(f'Expected at most one public Cyppt item, got {len(positions)}')
+          if positions:
+              items[positions[0]] = staged_item
+          else:
+              items.append(staged_item)
+          items.sort(key=lambda x: (str(x.get('name', '')).casefold(), str(x.get('packageName', ''))))
+          public_path.write_text(json.dumps(public, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+          rm -f test/apk/tachiyomi-zh.cyppt-v*.apk
+          rm -f test/icon/eu.kanade.tachiyomi.extension.zh.cyppt-v*.png
+          cp /tmp/cyppt.apk test/apk/tachiyomi-zh.cyppt-v1.6.3.apk
+          cp /tmp/cyppt.png test/icon/eu.kanade.tachiyomi.extension.zh.cyppt-v106003.png
+          git status --short
+
+      - name: Commit and push Cyppt v1.6.3 test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test/index.json test/apk test/icon
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No Cyppt test-store changes to publish'
+          else
+            git commit -m 'Publish Cyppt v1.6.3 test'
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify published files locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          package = 'eu.kanade.tachiyomi.extension.zh.cyppt'
+          data = json.loads(Path('test/index.json').read_text('utf-8'))
+          items = [x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
+          assert len(items) == 1
+          item = items[0]
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.3', 106003)
+          assert item.get('extensionLib') == '1.6'
+          source = (item.get('sources') or [{}])[0]
+          assert source.get('name') == '超越漫画网'
+          assert source.get('homeUrl') == 'https://www.cyppt.com'
+          apk = Path('test/apk/tachiyomi-zh.cyppt-v1.6.3.apk')
+          icon = Path('test/icon/eu.kanade.tachiyomi.extension.zh.cyppt-v106003.png')
+          assert apk.is_file() and icon.is_file()
+          staged_hash = Path('/tmp/cyppt.sha256').read_text().split()[0]
+          assert hashlib.sha256(apk.read_bytes()).hexdigest() == staged_hash
+          print('Cyppt v1.6.3 local test promotion verified:', staged_hash)
+          PY
