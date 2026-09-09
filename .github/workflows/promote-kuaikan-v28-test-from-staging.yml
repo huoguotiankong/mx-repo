@@ -1,0 +1,152 @@
+name: Promote Kuaikan v28 test from staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-kuaikan-v28-test-from-staging.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-kuaikan-v28-test
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout public test repository branch
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-repo
+          ref: repo
+          path: public-repo
+          fetch-depth: 0
+          token: ${{ github.token }}
+          persist-credentials: true
+
+      - name: Fetch prepared public staging store
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch extension-staging https://github.com/huoguotiankong/mx-build.git staging
+
+      - name: Promote only Kuaikan v28 test files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          package = "eu.kanade.tachiyomi.extension.zh.kuaikanmanhua"
+          version_name = "1.6.28"
+          version_code = 106028
+
+          src = Path("staging/test")
+          dst = Path("public-repo/test")
+
+          src_apk = src / "apk/tachiyomi-zh.kuaikanmanhua-v1.6.28.apk"
+          src_icon = src / "icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106028.png"
+          if not src_apk.is_file() or not src_icon.is_file():
+              raise SystemExit("Prepared Kuaikan v28 APK/icon missing from extension-staging")
+
+          (dst / "apk").mkdir(parents=True, exist_ok=True)
+          (dst / "icon").mkdir(parents=True, exist_ok=True)
+          shutil.copy2(src_apk, dst / "apk" / src_apk.name)
+          shutil.copy2(src_icon, dst / "icon" / src_icon.name)
+
+          for old in (dst / "apk").glob("tachiyomi-zh.kuaikanmanhua-v*.apk"):
+              if old.name != src_apk.name:
+                  old.unlink()
+          for old in (dst / "icon").glob("eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v*.png"):
+              if old.name != src_icon.name:
+                  old.unlink()
+
+          for name in ("index.json", "repo.json"):
+              source_data = json.loads((src / name).read_text("utf-8"))
+              target_data = json.loads((dst / name).read_text("utf-8"))
+              source_items = source_data["extensionList"]["extensions"]
+              target_items = target_data["extensionList"]["extensions"]
+              replacement = next((x for x in source_items if x.get("packageName") == package), None)
+              if replacement is None:
+                  raise SystemExit(f"{name}: staged Kuaikan entry missing")
+              if (replacement.get("versionName"), replacement.get("versionCode")) != (version_name, version_code):
+                  raise SystemExit(f"{name}: unexpected staged Kuaikan version")
+              replaced = False
+              for i, item in enumerate(target_items):
+                  if item.get("packageName") == package:
+                      target_items[i] = replacement
+                      replaced = True
+                      break
+              if not replaced:
+                  target_items.append(replacement)
+              (dst / name).write_text(json.dumps(target_data, ensure_ascii=False, indent=2) + "\n", "utf-8")
+
+          print("Prepared Kuaikan v28 public test promotion only")
+          PY
+
+      - name: Verify promoted test store locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package = "eu.kanade.tachiyomi.extension.zh.kuaikanmanhua"
+          for name in ("index.json", "repo.json"):
+              data = json.loads(Path("public-repo/test", name).read_text("utf-8"))
+              item = next(x for x in data["extensionList"]["extensions"] if x.get("packageName") == package)
+              assert item["versionName"] == "1.6.28", item
+              assert item["versionCode"] == 106028, item
+              assert item["resources"]["apkUrl"].endswith("tachiyomi-zh.kuaikanmanhua-v1.6.28.apk"), item
+          assert Path("public-repo/test/apk/tachiyomi-zh.kuaikanmanhua-v1.6.28.apk").is_file()
+          assert Path("public-repo/test/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106028.png").is_file()
+          print("Kuaikan v28 local test store verification passed")
+          PY
+
+      - name: Commit public Kuaikan v28 test store
+        working-directory: public-repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "No test-store changes required."
+            exit 0
+          fi
+          git commit -m 'Publish Kuaikan v28 chapter-date test'
+          git push origin HEAD:repo
+
+      - name: Verify public Kuaikan v28 test online
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            if python3 - <<'PY'
+          import json
+          import urllib.request
+          url = "https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test/index.json"
+          with urllib.request.urlopen(url, timeout=20) as response:
+              data = json.load(response)
+          package = "eu.kanade.tachiyomi.extension.zh.kuaikanmanhua"
+          item = next(x for x in data["extensionList"]["extensions"] if x.get("packageName") == package)
+          assert item["versionName"] == "1.6.28", item
+          assert item["versionCode"] == 106028, item
+          print("Public Kuaikan v28 test index is online")
+          PY
+            then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error::Public Kuaikan v28 test index did not become visible in time"
+          exit 1
