@@ -1,0 +1,170 @@
+name: Promote Tencent v31 and Kuaikan v27 chapter-date test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/promote-chapter-date-fixes-v31-v27-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-chapter-date-fixes-v31-v27-test
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository release branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          path: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout staged test store
+        uses: actions/checkout@v5
+        with:
+          repository: huoguotiankong/mx-build
+          ref: extension-staging
+          path: staging
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify and promote only Tencent v31 and Kuaikan v27
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+
+          targets = {
+              'eu.kanade.tachiyomi.extension.zh.tencentcomics': {
+                  'version': ('1.4.31', 104031),
+                  'apk': 'tachiyomi-zh.tencentcomics-v1.4.31.apk',
+                  'icon': 'eu.kanade.tachiyomi.extension.zh.tencentcomics-v104031.png',
+              },
+              'eu.kanade.tachiyomi.extension.zh.kuaikanmanhua': {
+                  'version': ('1.6.27', 106027),
+                  'apk': 'tachiyomi-zh.kuaikanmanhua-v1.6.27.apk',
+                  'icon': 'eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106027.png',
+              },
+          }
+
+          staged = json.loads(Path('staging/test/index.json').read_text('utf-8'))
+          public_path = Path('repo/test/index.json')
+          public = json.loads(public_path.read_text('utf-8'))
+          staged_items = staged['extensionList']['extensions']
+          public_items = public['extensionList']['extensions']
+
+          for package, spec in targets.items():
+              matches = [x for x in staged_items if x.get('packageName') == package]
+              if len(matches) != 1:
+                  raise SystemExit(f'{package}: expected one staged entry, got {len(matches)}')
+              item = matches[0]
+              actual = (item.get('versionName'), item.get('versionCode'))
+              if actual != spec['version']:
+                  raise SystemExit(f'{package}: expected {spec["version"]}, got {actual}')
+              apk = Path('staging/test/apk') / spec['apk']
+              icon = Path('staging/test/icon') / spec['icon']
+              if not apk.is_file() or not icon.is_file():
+                  raise SystemExit(f'{package}: staged APK/icon missing')
+              print(package, 'apk sha256=', hashlib.sha256(apk.read_bytes()).hexdigest())
+
+              positions = [i for i, x in enumerate(public_items) if x.get('packageName') == package]
+              if len(positions) == 0:
+                  public_items.append(item)
+              elif len(positions) == 1:
+                  public_items[positions[0]] = item
+              else:
+                  raise SystemExit(f'{package}: expected at most one public entry, got {len(positions)}')
+
+          public_path.write_text(json.dumps(public, ensure_ascii=False, indent=2) + '\n', 'utf-8')
+          PY
+
+          rm -f repo/test/apk/tachiyomi-zh.tencentcomics-v*.apk
+          rm -f repo/test/icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v*.png
+          rm -f repo/test/apk/tachiyomi-zh.kuaikanmanhua-v*.apk
+          rm -f repo/test/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v*.png
+
+          cp staging/test/apk/tachiyomi-zh.tencentcomics-v1.4.31.apk repo/test/apk/
+          cp staging/test/icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104031.png repo/test/icon/
+          cp staging/test/apk/tachiyomi-zh.kuaikanmanhua-v1.6.27.apk repo/test/apk/
+          cp staging/test/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106027.png repo/test/icon/
+
+      - name: Commit public chapter-date test
+        working-directory: repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test/index.json test/apk test/icon
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No Tencent/Kuaikan test-store changes'
+          else
+            git commit -m 'Publish Tencent v31 and Kuaikan v27 chapter-date test'
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify promoted files locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          expected = {
+              'eu.kanade.tachiyomi.extension.zh.tencentcomics': ('1.4.31', 104031),
+              'eu.kanade.tachiyomi.extension.zh.kuaikanmanhua': ('1.6.27', 106027),
+          }
+          data = json.loads(Path('repo/test/index.json').read_text('utf-8'))
+          versions = {x.get('packageName'): (x.get('versionName'), x.get('versionCode')) for x in data['extensionList']['extensions']}
+          for package, wanted in expected.items():
+              assert versions.get(package) == wanted, (package, versions.get(package), wanted)
+          assert Path('repo/test/apk/tachiyomi-zh.tencentcomics-v1.4.31.apk').is_file()
+          assert Path('repo/test/icon/eu.kanade.tachiyomi.extension.zh.tencentcomics-v104031.png').is_file()
+          assert Path('repo/test/apk/tachiyomi-zh.kuaikanmanhua-v1.6.27.apk').is_file()
+          assert Path('repo/test/icon/eu.kanade.tachiyomi.extension.zh.kuaikanmanhua-v106027.png').is_file()
+          print('Local Tencent v31 + Kuaikan v27 promotion verification passed')
+          PY
+
+      - name: Verify public raw test store
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, time, urllib.request
+          base = 'https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test'
+          expected = {
+              'eu.kanade.tachiyomi.extension.zh.tencentcomics': ('1.4.31', 104031),
+              'eu.kanade.tachiyomi.extension.zh.kuaikanmanhua': ('1.6.27', 106027),
+          }
+          for attempt in range(1, 11):
+              try:
+                  with urllib.request.urlopen(base + '/index.json?v=chapter-dates-' + str(attempt), timeout=15) as r:
+                      data = json.load(r)
+                  versions = {x.get('packageName'): (x.get('versionName'), x.get('versionCode')) for x in data['extensionList']['extensions']}
+                  if all(versions.get(k) == v for k, v in expected.items()):
+                      for rel in (
+                          '/apk/tachiyomi-zh.tencentcomics-v1.4.31.apk',
+                          '/apk/tachiyomi-zh.kuaikanmanhua-v1.6.27.apk',
+                      ):
+                          req = urllib.request.Request(base + rel + '?v=' + str(attempt), method='HEAD')
+                          with urllib.request.urlopen(req, timeout=15) as rr:
+                              if rr.status != 200:
+                                  raise RuntimeError((rel, rr.status))
+                      print('Public raw Tencent v31 + Kuaikan v27 test store verified')
+                      raise SystemExit(0)
+              except Exception as e:
+                  print('attempt', attempt, 'not ready:', e)
+              time.sleep(min(attempt, 5))
+          raise SystemExit('Public raw chapter-date test store not visible')
+          PY
