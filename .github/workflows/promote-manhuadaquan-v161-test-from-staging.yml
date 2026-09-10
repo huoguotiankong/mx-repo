@@ -1,0 +1,165 @@
+name: Promote Manga Daquan v1.6.1 test from staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/promote-manhuadaquan-v161-test-from-staging.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-manhuadaquan-test
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout public repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Fetch pinned staged Manga Daquan v1.6.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_sha='1f0a918fad540e420a15b215aa99e345a94dd819'
+          base="https://raw.githubusercontent.com/huoguotiankong/mx-build/$staging_sha/test"
+          curl -fsSL --retry 3 "$base/index.json" -o /tmp/staged-index.json
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.manhuadaquan-v1.6.1.apk" -o /tmp/manhuadaquan.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.manhuadaquan-v106001.png" -o /tmp/manhuadaquan.png
+          test -s /tmp/manhuadaquan.apk
+          test -s /tmp/manhuadaquan.png
+          sha256sum /tmp/manhuadaquan.apk | tee /tmp/manhuadaquan.sha256
+          sha256sum /tmp/manhuadaquan.png | tee /tmp/manhuadaquan-icon.sha256
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package = 'eu.kanade.tachiyomi.extension.zh.manhuadaquan'
+          staged = json.loads(Path('/tmp/staged-index.json').read_text('utf-8'))
+          items = [x for x in staged['extensionList']['extensions'] if x.get('packageName') == package]
+          if len(items) != 1:
+              raise SystemExit(f'Expected one staged Manga Daquan item, got {len(items)}')
+          item = items[0]
+          if (item.get('versionName'), item.get('versionCode')) != ('1.6.1', 106001):
+              raise SystemExit(f'Unexpected staged Manga Daquan version: {(item.get("versionName"), item.get("versionCode"))}')
+          if item.get('extensionLib') != '1.6':
+              raise SystemExit(f'Unexpected extensionLib: {item.get("extensionLib")}')
+          sources = item.get('sources') or []
+          if len(sources) != 1 or sources[0].get('name') != '漫画大全':
+              raise SystemExit('Unexpected staged Manga Daquan source metadata')
+          if sources[0].get('homeUrl') != 'http://m.yueman1.cc':
+              raise SystemExit(f'Unexpected Manga Daquan homeUrl: {sources[0].get("homeUrl")}')
+          Path('/tmp/manhuadaquan-entry.json').write_text(json.dumps(item, ensure_ascii=False), encoding='utf-8')
+          PY
+
+      - name: Promote only Manga Daquan v1.6.1 to test store
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package = 'eu.kanade.tachiyomi.extension.zh.manhuadaquan'
+          public_path = Path('test/index.json')
+          public = json.loads(public_path.read_text('utf-8'))
+          staged_item = json.loads(Path('/tmp/manhuadaquan-entry.json').read_text('utf-8'))
+          items = public['extensionList']['extensions']
+          positions = [i for i, x in enumerate(items) if x.get('packageName') == package]
+          if len(positions) > 1:
+              raise SystemExit(f'Expected at most one public Manga Daquan item, got {len(positions)}')
+          if positions:
+              items[positions[0]] = staged_item
+          else:
+              items.append(staged_item)
+          items.sort(key=lambda x: (str(x.get('name', '')).casefold(), str(x.get('packageName', ''))))
+          public_path.write_text(json.dumps(public, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+          rm -f test/apk/tachiyomi-zh.manhuadaquan-v*.apk
+          rm -f test/icon/eu.kanade.tachiyomi.extension.zh.manhuadaquan-v*.png
+          cp /tmp/manhuadaquan.apk test/apk/tachiyomi-zh.manhuadaquan-v1.6.1.apk
+          cp /tmp/manhuadaquan.png test/icon/eu.kanade.tachiyomi.extension.zh.manhuadaquan-v106001.png
+          git status --short
+
+      - name: Commit and push Manga Daquan v1.6.1 test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test/index.json test/apk test/icon
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No Manga Daquan test-store changes to publish'
+          else
+            git commit -m 'Publish Manga Daquan v1.6.1 test'
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify published files locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          package = 'eu.kanade.tachiyomi.extension.zh.manhuadaquan'
+          data = json.loads(Path('test/index.json').read_text('utf-8'))
+          items = [x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
+          assert len(items) == 1
+          item = items[0]
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.1', 106001)
+          assert item.get('extensionLib') == '1.6'
+          source = (item.get('sources') or [{}])[0]
+          assert source.get('name') == '漫画大全'
+          assert source.get('homeUrl') == 'http://m.yueman1.cc'
+          apk = Path('test/apk/tachiyomi-zh.manhuadaquan-v1.6.1.apk')
+          icon = Path('test/icon/eu.kanade.tachiyomi.extension.zh.manhuadaquan-v106001.png')
+          assert apk.is_file() and icon.is_file()
+          staged_hash = Path('/tmp/manhuadaquan.sha256').read_text().split()[0]
+          staged_icon_hash = Path('/tmp/manhuadaquan-icon.sha256').read_text().split()[0]
+          assert hashlib.sha256(apk.read_bytes()).hexdigest() == staged_hash
+          assert hashlib.sha256(icon.read_bytes()).hexdigest() == staged_icon_hash
+          print('Manga Daquan v1.6.1 local test promotion verified:', staged_hash, staged_icon_hash)
+          PY
+
+      - name: Verify public raw test store
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test'
+          for attempt in 1 2 3 4 5 6; do
+            status="$(curl -L -sS -o /tmp/public-index.json -w '%{http_code}' "$base/index.json" || true)"
+            [[ "$status" == '200' ]] && break
+            sleep $((attempt * 2))
+          done
+          [[ "${status:-}" == '200' ]]
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.manhuadaquan-v1.6.1.apk" -o /tmp/public-manhuadaquan.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.manhuadaquan-v106001.png" -o /tmp/public-manhuadaquan.png
+          test -s /tmp/public-manhuadaquan.apk
+          test -s /tmp/public-manhuadaquan.png
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          package='eu.kanade.tachiyomi.extension.zh.manhuadaquan'
+          data=json.loads(Path('/tmp/public-index.json').read_text('utf-8'))
+          items=[x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
+          assert len(items) == 1
+          item=items[0]
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.1', 106001)
+          staged=Path('/tmp/manhuadaquan.sha256').read_text().split()[0]
+          staged_icon=Path('/tmp/manhuadaquan-icon.sha256').read_text().split()[0]
+          public_hash=hashlib.sha256(Path('/tmp/public-manhuadaquan.apk').read_bytes()).hexdigest()
+          public_icon_hash=hashlib.sha256(Path('/tmp/public-manhuadaquan.png').read_bytes()).hexdigest()
+          assert public_hash == staged
+          assert public_icon_hash == staged_icon
+          print('Public Manga Daquan v1.6.1 test verified:', public_hash, public_icon_hash)
+          PY
