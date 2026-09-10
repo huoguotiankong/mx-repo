@@ -26,15 +26,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Fetch pinned staged Fengche Manhua v1.6.2
+      - name: Fetch pinned staged Fengche Manhua v1.6.3
         shell: bash
         run: |
           set -euo pipefail
-          staging_sha='f272f81adb7c8a514e1031192099b9765e40e2d0'
+          staging_sha='f0d3d342d0d7050868b85b407d11b6382d4c2664'
           base="https://raw.githubusercontent.com/huoguotiankong/mx-build/$staging_sha/test"
           curl -fsSL --retry 3 "$base/index.json" -o /tmp/staged-index.json
-          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.fengchemanhua-v1.6.2.apk" -o /tmp/fengchemanhua.apk
-          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106002.png" -o /tmp/fengchemanhua.png
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.fengchemanhua-v1.6.3.apk" -o /tmp/fengchemanhua.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106003.png" -o /tmp/fengchemanhua.png
           test -s /tmp/fengchemanhua.apk
           test -s /tmp/fengchemanhua.png
           sha256sum /tmp/fengchemanhua.apk | tee /tmp/fengchemanhua.sha256
@@ -47,7 +47,7 @@ jobs:
           if len(items) != 1:
               raise SystemExit(f'Expected one staged Fengche Manhua item, got {len(items)}')
           item = items[0]
-          if (item.get('versionName'), item.get('versionCode')) != ('1.6.2', 106002):
+          if (item.get('versionName'), item.get('versionCode')) != ('1.6.3', 106003):
               raise SystemExit(f'Unexpected staged Fengche version: {(item.get("versionName"), item.get("versionCode"))}')
           if item.get('extensionLib') != '1.6':
               raise SystemExit(f'Unexpected extensionLib: {item.get("extensionLib")}')
@@ -59,7 +59,7 @@ jobs:
           Path('/tmp/fengchemanhua-entry.json').write_text(json.dumps(item, ensure_ascii=False), encoding='utf-8')
           PY
 
-      - name: Promote only Fengche Manhua v1.6.2 to test store
+      - name: Promote only Fengche Manhua v1.6.3 to test store
         shell: bash
         run: |
           set -euo pipefail
@@ -83,11 +83,11 @@ jobs:
           PY
           rm -f test/apk/tachiyomi-zh.fengchemanhua-v*.apk
           rm -f test/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v*.png
-          cp /tmp/fengchemanhua.apk test/apk/tachiyomi-zh.fengchemanhua-v1.6.2.apk
-          cp /tmp/fengchemanhua.png test/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106002.png
+          cp /tmp/fengchemanhua.apk test/apk/tachiyomi-zh.fengchemanhua-v1.6.3.apk
+          cp /tmp/fengchemanhua.png test/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106003.png
           git status --short
 
-      - name: Commit and push Fengche Manhua v1.6.2 test
+      - name: Commit and push Fengche Manhua v1.6.3 test
         shell: bash
         run: |
           set -euo pipefail
@@ -98,7 +98,7 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No Fengche Manhua test-store changes to publish'
           else
-            git commit -m 'Publish Fengche Manhua v1.6.2 test'
+            git commit -m 'Publish Fengche Manhua v1.6.3 test'
             git push origin HEAD:repo
           fi
 
@@ -115,17 +115,17 @@ jobs:
           items = [x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
           assert len(items) == 1
           item = items[0]
-          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.2', 106002)
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.3', 106003)
           assert item.get('extensionLib') == '1.6'
           source = (item.get('sources') or [{}])[0]
           assert source.get('name') == '风车漫画'
           assert source.get('homeUrl') == 'https://www.fengchemh.com'
-          apk = Path('test/apk/tachiyomi-zh.fengchemanhua-v1.6.2.apk')
-          icon = Path('test/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106002.png')
+          apk = Path('test/apk/tachiyomi-zh.fengchemanhua-v1.6.3.apk')
+          icon = Path('test/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106003.png')
           assert apk.is_file() and icon.is_file()
           staged_hash = Path('/tmp/fengchemanhua.sha256').read_text().split()[0]
           assert hashlib.sha256(apk.read_bytes()).hexdigest() == staged_hash
-          print('Fengche Manhua v1.6.2 local test promotion verified:', staged_hash)
+          print('Fengche Manhua v1.6.3 local test promotion verified:', staged_hash)
           PY
 
       - name: Verify public raw test store
@@ -139,8 +139,8 @@ jobs:
             sleep $((attempt * 2))
           done
           [[ "${status:-}" == '200' ]]
-          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.fengchemanhua-v1.6.2.apk" -o /tmp/public-fengchemanhua.apk
-          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106002.png" -o /tmp/public-fengchemanhua.png
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.fengchemanhua-v1.6.3.apk" -o /tmp/public-fengchemanhua.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106003.png" -o /tmp/public-fengchemanhua.png
           test -s /tmp/public-fengchemanhua.apk
           test -s /tmp/public-fengchemanhua.png
           python3 - <<'PY'
@@ -151,7 +151,7 @@ jobs:
           items=[x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
           assert len(items) == 1
           item=items[0]
-          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.2', 106002)
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.3', 106003)
           staged=Path('/tmp/fengchemanhua.sha256').read_text().split()[0]
           public_hash=hashlib.sha256(Path('/tmp/public-fengchemanhua.apk').read_bytes()).hexdigest()
           assert public_hash == staged
