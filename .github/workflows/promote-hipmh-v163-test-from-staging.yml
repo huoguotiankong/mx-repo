@@ -1,0 +1,157 @@
+name: Promote HipMH v1.6.3 test from staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/promote-hipmh-v163-test-from-staging.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-hipmh-test
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout public repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Fetch pinned staged HipMH v1.6.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_sha='f404d59584da0709a1edc6aa2f1de4b7475f49a3'
+          base="https://raw.githubusercontent.com/huoguotiankong/mx-build/$staging_sha/test"
+          curl -fsSL --retry 3 "$base/index.json" -o /tmp/staged-index.json
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.hipmh-v1.6.3.apk" -o /tmp/hipmh.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.hipmh-v106003.png" -o /tmp/hipmh.png
+          test -s /tmp/hipmh.apk
+          test -s /tmp/hipmh.png
+          sha256sum /tmp/hipmh.apk | tee /tmp/hipmh.sha256
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package = 'eu.kanade.tachiyomi.extension.zh.hipmh'
+          staged = json.loads(Path('/tmp/staged-index.json').read_text('utf-8'))
+          items = [x for x in staged['extensionList']['extensions'] if x.get('packageName') == package]
+          if len(items) != 1:
+              raise SystemExit(f'Expected one staged HipMH item, got {len(items)}')
+          item = items[0]
+          if (item.get('versionName'), item.get('versionCode')) != ('1.6.3', 106003):
+              raise SystemExit(f'Unexpected staged HipMH version: {(item.get("versionName"), item.get("versionCode"))}')
+          if item.get('extensionLib') != '1.6':
+              raise SystemExit(f'Unexpected extensionLib: {item.get("extensionLib")}')
+          sources = item.get('sources') or []
+          if len(sources) != 1 or sources[0].get('name') != '嬉皮漫画':
+              raise SystemExit('Unexpected staged HipMH source metadata')
+          if sources[0].get('homeUrl') != 'https://m.hipmh.com':
+              raise SystemExit(f'Unexpected HipMH homeUrl: {sources[0].get("homeUrl")}')
+          Path('/tmp/hipmh-entry.json').write_text(json.dumps(item, ensure_ascii=False), encoding='utf-8')
+          PY
+
+      - name: Promote only HipMH v1.6.3 to test store
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package = 'eu.kanade.tachiyomi.extension.zh.hipmh'
+          public_path = Path('test/index.json')
+          public = json.loads(public_path.read_text('utf-8'))
+          staged_item = json.loads(Path('/tmp/hipmh-entry.json').read_text('utf-8'))
+          items = public['extensionList']['extensions']
+          positions = [i for i, x in enumerate(items) if x.get('packageName') == package]
+          if len(positions) > 1:
+              raise SystemExit(f'Expected at most one public HipMH item, got {len(positions)}')
+          if positions:
+              items[positions[0]] = staged_item
+          else:
+              items.append(staged_item)
+          items.sort(key=lambda x: (str(x.get('name', '')).casefold(), str(x.get('packageName', ''))))
+          public_path.write_text(json.dumps(public, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+          rm -f test/apk/tachiyomi-zh.hipmh-v*.apk
+          rm -f test/icon/eu.kanade.tachiyomi.extension.zh.hipmh-v*.png
+          cp /tmp/hipmh.apk test/apk/tachiyomi-zh.hipmh-v1.6.3.apk
+          cp /tmp/hipmh.png test/icon/eu.kanade.tachiyomi.extension.zh.hipmh-v106003.png
+          git status --short
+
+      - name: Commit and push HipMH v1.6.3 test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test/index.json test/apk test/icon
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No HipMH test-store changes to publish'
+          else
+            git commit -m 'Publish HipMH v1.6.3 test'
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify published files locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          package = 'eu.kanade.tachiyomi.extension.zh.hipmh'
+          data = json.loads(Path('test/index.json').read_text('utf-8'))
+          items = [x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
+          assert len(items) == 1
+          item = items[0]
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.3', 106003)
+          assert item.get('extensionLib') == '1.6'
+          source = (item.get('sources') or [{}])[0]
+          assert source.get('name') == '嬉皮漫画'
+          assert source.get('homeUrl') == 'https://m.hipmh.com'
+          apk = Path('test/apk/tachiyomi-zh.hipmh-v1.6.3.apk')
+          icon = Path('test/icon/eu.kanade.tachiyomi.extension.zh.hipmh-v106003.png')
+          assert apk.is_file() and icon.is_file()
+          staged_hash = Path('/tmp/hipmh.sha256').read_text().split()[0]
+          assert hashlib.sha256(apk.read_bytes()).hexdigest() == staged_hash
+          print('HipMH v1.6.3 local test promotion verified:', staged_hash)
+          PY
+
+      - name: Verify public raw test store
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test'
+          for file in index.json apk/tachiyomi-zh.hipmh-v1.6.3.apk icon/eu.kanade.tachiyomi.extension.zh.hipmh-v106003.png; do
+            ok=0
+            for attempt in 1 2 3 4 5 6; do
+              status="$(curl -L -sS -o "/tmp/$(basename "$file")" -w '%{http_code}' "$base/$file" || true)"
+              if [[ "$status" == '200' ]]; then ok=1; break; fi
+              sleep $((attempt * 2))
+            done
+            [[ "$ok" -eq 1 ]] || { echo "::error::Published endpoint unavailable: $file"; exit 1; }
+          done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package = 'eu.kanade.tachiyomi.extension.zh.hipmh'
+          data = json.loads(Path('/tmp/index.json').read_text('utf-8'))
+          items = [x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
+          assert len(items) == 1
+          item = items[0]
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.3', 106003)
+          source = (item.get('sources') or [{}])[0]
+          assert source.get('name') == '嬉皮漫画'
+          print('Public HipMH v1.6.3 test index verified')
+          PY
