@@ -1,0 +1,159 @@
+name: Promote Fengche Manhua v1 test from staging
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/promote-fengchemanhua-v1-test-from-staging.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-fengchemanhua-test
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout public repo branch
+        uses: actions/checkout@v5
+        with:
+          ref: repo
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Fetch pinned staged Fengche Manhua v1.6.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_sha='0f2c7a975bc4375eb4655b3c3b767220d552ca79'
+          base="https://raw.githubusercontent.com/huoguotiankong/mx-build/$staging_sha/test"
+          curl -fsSL --retry 3 "$base/index.json" -o /tmp/staged-index.json
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.fengchemanhua-v1.6.1.apk" -o /tmp/fengchemanhua.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106001.png" -o /tmp/fengchemanhua.png
+          test -s /tmp/fengchemanhua.apk
+          test -s /tmp/fengchemanhua.png
+          sha256sum /tmp/fengchemanhua.apk | tee /tmp/fengchemanhua.sha256
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package = 'eu.kanade.tachiyomi.extension.zh.fengchemanhua'
+          staged = json.loads(Path('/tmp/staged-index.json').read_text('utf-8'))
+          items = [x for x in staged['extensionList']['extensions'] if x.get('packageName') == package]
+          if len(items) != 1:
+              raise SystemExit(f'Expected one staged Fengche Manhua item, got {len(items)}')
+          item = items[0]
+          if (item.get('versionName'), item.get('versionCode')) != ('1.6.1', 106001):
+              raise SystemExit(f'Unexpected staged Fengche version: {(item.get("versionName"), item.get("versionCode"))}')
+          if item.get('extensionLib') != '1.6':
+              raise SystemExit(f'Unexpected extensionLib: {item.get("extensionLib")}')
+          sources = item.get('sources') or []
+          if len(sources) != 1 or sources[0].get('name') != '风车漫画':
+              raise SystemExit('Unexpected staged Fengche source metadata')
+          if sources[0].get('homeUrl') != 'https://www.fengchemh.com':
+              raise SystemExit(f'Unexpected Fengche homeUrl: {sources[0].get("homeUrl")}')
+          Path('/tmp/fengchemanhua-entry.json').write_text(json.dumps(item, ensure_ascii=False), encoding='utf-8')
+          PY
+
+      - name: Promote only Fengche Manhua v1.6.1 to test store
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          package = 'eu.kanade.tachiyomi.extension.zh.fengchemanhua'
+          public_path = Path('test/index.json')
+          public = json.loads(public_path.read_text('utf-8'))
+          staged_item = json.loads(Path('/tmp/fengchemanhua-entry.json').read_text('utf-8'))
+          items = public['extensionList']['extensions']
+          positions = [i for i, x in enumerate(items) if x.get('packageName') == package]
+          if len(positions) > 1:
+              raise SystemExit(f'Expected at most one public Fengche Manhua item, got {len(positions)}')
+          if positions:
+              items[positions[0]] = staged_item
+          else:
+              items.append(staged_item)
+          items.sort(key=lambda x: (str(x.get('name', '')).casefold(), str(x.get('packageName', ''))))
+          public_path.write_text(json.dumps(public, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+          rm -f test/apk/tachiyomi-zh.fengchemanhua-v*.apk
+          rm -f test/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v*.png
+          cp /tmp/fengchemanhua.apk test/apk/tachiyomi-zh.fengchemanhua-v1.6.1.apk
+          cp /tmp/fengchemanhua.png test/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106001.png
+          git status --short
+
+      - name: Commit and push Fengche Manhua v1.6.1 test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add test/index.json test/apk test/icon
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No Fengche Manhua test-store changes to publish'
+          else
+            git commit -m 'Publish Fengche Manhua v1.6.1 test'
+            git push origin HEAD:repo
+          fi
+
+      - name: Verify published files locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          package = 'eu.kanade.tachiyomi.extension.zh.fengchemanhua'
+          data = json.loads(Path('test/index.json').read_text('utf-8'))
+          items = [x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
+          assert len(items) == 1
+          item = items[0]
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.1', 106001)
+          assert item.get('extensionLib') == '1.6'
+          source = (item.get('sources') or [{}])[0]
+          assert source.get('name') == '风车漫画'
+          assert source.get('homeUrl') == 'https://www.fengchemh.com'
+          apk = Path('test/apk/tachiyomi-zh.fengchemanhua-v1.6.1.apk')
+          icon = Path('test/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106001.png')
+          assert apk.is_file() and icon.is_file()
+          staged_hash = Path('/tmp/fengchemanhua.sha256').read_text().split()[0]
+          assert hashlib.sha256(apk.read_bytes()).hexdigest() == staged_hash
+          print('Fengche Manhua v1.6.1 local test promotion verified:', staged_hash)
+          PY
+
+      - name: Verify public raw test store
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test'
+          for attempt in 1 2 3 4 5 6; do
+            status="$(curl -L -sS -o /tmp/public-index.json -w '%{http_code}' "$base/index.json" || true)"
+            [[ "$status" == '200' ]] && break
+            sleep $((attempt * 2))
+          done
+          [[ "${status:-}" == '200' ]]
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.fengchemanhua-v1.6.1.apk" -o /tmp/public-fengchemanhua.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.fengchemanhua-v106001.png" -o /tmp/public-fengchemanhua.png
+          test -s /tmp/public-fengchemanhua.apk
+          test -s /tmp/public-fengchemanhua.png
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          package='eu.kanade.tachiyomi.extension.zh.fengchemanhua'
+          data=json.loads(Path('/tmp/public-index.json').read_text('utf-8'))
+          items=[x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
+          assert len(items) == 1
+          item=items[0]
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.1', 106001)
+          staged=Path('/tmp/fengchemanhua.sha256').read_text().split()[0]
+          public_hash=hashlib.sha256(Path('/tmp/public-fengchemanhua.apk').read_bytes()).hexdigest()
+          assert public_hash == staged
+          print('Public Fengche Manhua test verified:', public_hash)
+          PY
