@@ -74,12 +74,12 @@
         "name": "CopyManga Plus",
         "packageName": "eu.kanade.tachiyomi.extension.zh.copymangaplus",
         "resources": {
-          "apkUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/apk/tachiyomi-zh.copymangaplus-v1.6.5.apk",
-          "iconUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/icon/eu.kanade.tachiyomi.extension.zh.copymangaplus-v106005.png"
+          "apkUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/apk/tachiyomi-zh.copymangaplus-v1.6.6.apk",
+          "iconUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/icon/eu.kanade.tachiyomi.extension.zh.copymangaplus-v106006.png"
         },
         "extensionLib": "1.6",
-        "versionCode": 106005,
-        "versionName": "1.6.5",
+        "versionCode": 106006,
+        "versionName": "1.6.6",
         "contentWarning": "NSFW",
         "sources": [
           {
@@ -231,12 +231,12 @@
         "name": "KManhua",
         "packageName": "eu.kanade.tachiyomi.extension.zh.kmanhua",
         "resources": {
-          "apkUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/apk/tachiyomi-zh.kmanhua-v1.6.1.apk",
-          "iconUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/icon/eu.kanade.tachiyomi.extension.zh.kmanhua-v106001.png"
+          "apkUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/apk/tachiyomi-zh.kmanhua-v1.6.2.apk",
+          "iconUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/icon/eu.kanade.tachiyomi.extension.zh.kmanhua-v106002.png"
         },
         "extensionLib": "1.6",
-        "versionCode": 106001,
-        "versionName": "1.6.1",
+        "versionCode": 106002,
+        "versionName": "1.6.2",
         "contentWarning": "NSFW",
         "sources": [
           {
@@ -341,28 +341,6 @@
         ]
       },
       {
-        "name": "Manwa Plus",
-        "packageName": "eu.kanade.tachiyomi.extension.zh.manwaplus",
-        "resources": {
-          "apkUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/apk/tachiyomi-zh.manwaplus-v1.6.4.apk",
-          "iconUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/icon/eu.kanade.tachiyomi.extension.zh.manwaplus-v106004.png"
-        },
-        "extensionLib": "1.6",
-        "versionCode": 106004,
-        "versionName": "1.6.4",
-        "contentWarning": "MIXED",
-        "sources": [
-          {
-            "id": 6342625961215603376,
-            "name": "漫蛙 Plus",
-            "language": "zh",
-            "homeUrl": "https://manwa.me",
-            "mirrorUrls": [],
-            "message": null
-          }
-        ]
-      },
-      {
         "name": "Manwang",
         "packageName": "eu.kanade.tachiyomi.extension.zh.manwang",
         "resources": {
@@ -379,6 +357,28 @@
             "name": "漫网",
             "language": "zh",
             "homeUrl": "https://mh5.app",
+            "mirrorUrls": [],
+            "message": null
+          }
+        ]
+      },
+      {
+        "name": "Manwa Plus",
+        "packageName": "eu.kanade.tachiyomi.extension.zh.manwaplus",
+        "resources": {
+          "apkUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/apk/tachiyomi-zh.manwaplus-v1.6.5.apk",
+          "iconUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/icon/eu.kanade.tachiyomi.extension.zh.manwaplus-v106005.png"
+        },
+        "extensionLib": "1.6",
+        "versionCode": 106005,
+        "versionName": "1.6.5",
+        "contentWarning": "MIXED",
+        "sources": [
+          {
+            "id": 6342625961215603376,
+            "name": "漫蛙 Plus",
+            "language": "zh",
+            "homeUrl": "https://manwa.me",
             "mirrorUrls": [],
             "message": null
           }
@@ -432,12 +432,12 @@
         "name": "MengXiGe",
         "packageName": "eu.kanade.tachiyomi.extension.zh.mengxige",
         "resources": {
-          "apkUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/apk/tachiyomi-zh.mengxige-v1.6.5.apk",
-          "iconUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v106005.png"
+          "apkUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/apk/tachiyomi-zh.mengxige-v1.6.6.apk",
+          "iconUrl": "https://github.com/huoguotiankong/mx-repo/raw/repo/test/icon/eu.kanade.tachiyomi.extension.zh.mengxige-v106006.png"
         },
         "extensionLib": "1.6",
-        "versionCode": 106005,
-        "versionName": "1.6.5",
+        "versionCode": 106006,
+        "versionName": "1.6.6",
         "contentWarning": "SAFE",
         "sources": [
           {
