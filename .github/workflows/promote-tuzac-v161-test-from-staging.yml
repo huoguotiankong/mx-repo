@@ -1,4 +1,4 @@
-name: Promote Tuzac v1.6.1 test from staging
+name: Promote Tuzac v1.6.2 test from staging
 
 on:
   push:
@@ -26,15 +26,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Fetch pinned staged Tuzac v1.6.1
+      - name: Fetch pinned staged Tuzac v1.6.2
         shell: bash
         run: |
           set -euo pipefail
-          staging_sha='aefceea6819ab465fa2007840dad782bf124d9ab'
+          staging_sha='69f7011aec1430c2082a7b25bd1c407ec78af20f'
           base="https://raw.githubusercontent.com/huoguotiankong/mx-build/$staging_sha/test"
           curl -fsSL --retry 3 "$base/index.json" -o /tmp/staged-index.json
-          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.tuzac-v1.6.1.apk" -o /tmp/tuzac.apk
-          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.tuzac-v106001.png" -o /tmp/tuzac.png
+          curl -fsSL --retry 3 "$base/apk/tachiyomi-zh.tuzac-v1.6.2.apk" -o /tmp/tuzac.apk
+          curl -fsSL --retry 3 "$base/icon/eu.kanade.tachiyomi.extension.zh.tuzac-v106002.png" -o /tmp/tuzac.png
           test -s /tmp/tuzac.apk
           test -s /tmp/tuzac.png
           sha256sum /tmp/tuzac.apk | tee /tmp/tuzac.sha256
@@ -47,7 +47,7 @@ jobs:
           if len(items) != 1:
               raise SystemExit(f'Expected one staged Tuzac item, got {len(items)}')
           item = items[0]
-          if (item.get('versionName'), item.get('versionCode')) != ('1.6.1', 106001):
+          if (item.get('versionName'), item.get('versionCode')) != ('1.6.2', 106002):
               raise SystemExit(f'Unexpected staged Tuzac version: {(item.get("versionName"), item.get("versionCode"))}')
           if item.get('extensionLib') != '1.6':
               raise SystemExit(f'Unexpected extensionLib: {item.get("extensionLib")}')
@@ -59,7 +59,7 @@ jobs:
           Path('/tmp/tuzac-entry.json').write_text(json.dumps(item, ensure_ascii=False), encoding='utf-8')
           PY
 
-      - name: Promote only Tuzac v1.6.1 to test store
+      - name: Promote only Tuzac v1.6.2 to test store
         shell: bash
         run: |
           set -euo pipefail
@@ -83,11 +83,11 @@ jobs:
           PY
           rm -f test/apk/tachiyomi-zh.tuzac-v*.apk
           rm -f test/icon/eu.kanade.tachiyomi.extension.zh.tuzac-v*.png
-          cp /tmp/tuzac.apk test/apk/tachiyomi-zh.tuzac-v1.6.1.apk
-          cp /tmp/tuzac.png test/icon/eu.kanade.tachiyomi.extension.zh.tuzac-v106001.png
+          cp /tmp/tuzac.apk test/apk/tachiyomi-zh.tuzac-v1.6.2.apk
+          cp /tmp/tuzac.png test/icon/eu.kanade.tachiyomi.extension.zh.tuzac-v106002.png
           git status --short
 
-      - name: Commit and push Tuzac v1.6.1 test
+      - name: Commit and push Tuzac v1.6.2 test
         shell: bash
         run: |
           set -euo pipefail
@@ -98,7 +98,7 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No Tuzac test-store changes to publish'
           else
-            git commit -m 'Publish Tuzac v1.6.1 test'
+            git commit -m 'Publish Tuzac v1.6.2 test'
             git push origin HEAD:repo
           fi
 
@@ -115,17 +115,17 @@ jobs:
           items = [x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
           assert len(items) == 1
           item = items[0]
-          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.1', 106001)
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.2', 106002)
           assert item.get('extensionLib') == '1.6'
           source = (item.get('sources') or [{}])[0]
           assert source.get('name') == '图宅'
           assert source.get('homeUrl') == 'https://www.tuzac.com'
-          apk = Path('test/apk/tachiyomi-zh.tuzac-v1.6.1.apk')
-          icon = Path('test/icon/eu.kanade.tachiyomi.extension.zh.tuzac-v106001.png')
+          apk = Path('test/apk/tachiyomi-zh.tuzac-v1.6.2.apk')
+          icon = Path('test/icon/eu.kanade.tachiyomi.extension.zh.tuzac-v106002.png')
           assert apk.is_file() and icon.is_file()
           staged_hash = Path('/tmp/tuzac.sha256').read_text().split()[0]
           assert hashlib.sha256(apk.read_bytes()).hexdigest() == staged_hash
-          print('Tuzac v1.6.1 local test promotion verified:', staged_hash)
+          print('Tuzac v1.6.2 local test promotion verified:', staged_hash)
           PY
 
       - name: Verify public raw test store
@@ -133,7 +133,7 @@ jobs:
         run: |
           set -euo pipefail
           base='https://raw.githubusercontent.com/huoguotiankong/mx-repo/repo/test'
-          for file in index.json apk/tachiyomi-zh.tuzac-v1.6.1.apk icon/eu.kanade.tachiyomi.extension.zh.tuzac-v106001.png; do
+          for file in index.json apk/tachiyomi-zh.tuzac-v1.6.2.apk icon/eu.kanade.tachiyomi.extension.zh.tuzac-v106002.png; do
             ok=0
             for attempt in 1 2 3 4 5 6; do
               status="$(curl -L -sS -o "/tmp/$(basename "$file")" -w '%{http_code}' "$base/$file" || true)"
@@ -150,8 +150,8 @@ jobs:
           items = [x for x in data['extensionList']['extensions'] if x.get('packageName') == package]
           assert len(items) == 1
           item = items[0]
-          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.1', 106001)
+          assert (item.get('versionName'), item.get('versionCode')) == ('1.6.2', 106002)
           source = (item.get('sources') or [{}])[0]
           assert source.get('name') == '图宅'
-          print('Public Tuzac v1.6.1 test index verified')
+          print('Public Tuzac v1.6.2 test index verified')
           PY
